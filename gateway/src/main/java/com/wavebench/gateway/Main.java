@@ -5,16 +5,13 @@ package com.wavebench.gateway;
  *
  * <p>Startup sequence:
  * <ol>
+ *   <li>Start the REST HTTP API server on port 8081 (auth, projects, exports)</li>
  *   <li>Create a {@link GatewayServer} (WebSocket on port 8080) — not started yet</li>
  *   <li>Connect {@link EngineClient} to the C++ engine (TCP localhost:5050),
  *       wiring the sample callback to {@code server.broadcastSample()} directly</li>
  *   <li>Start the WebSocket server so browsers can connect</li>
  *   <li>Register a JVM shutdown hook for graceful teardown</li>
  * </ol>
- *
- * <p>This order avoids the dual-connect anti-pattern described in the plan:
- * the broadcast lambda is passed to {@code connect()} before the server starts,
- * so no second connection is needed.
  *
  * <p>Run with:
  * <pre>
@@ -26,6 +23,9 @@ public class Main {
     /** WebSocket port that browsers connect to */
     public static final int WS_PORT     = 8080;
 
+    /** REST API port for auth, projects, and exports */
+    public static final int HTTP_PORT   = 8081;
+
     /** TCP port the C++ engine listens on */
     public static final int ENGINE_PORT = 5050;
 
@@ -34,11 +34,17 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
         System.out.println("============================================");
-        System.out.println("  WaveBench Studio — Java Gateway v1.0");
+        System.out.println("  WaveBench Studio — Java Gateway v2.0");
         System.out.println("============================================");
 
         // ------------------------------------------------------------------
-        // 1. Create the WebSocket server (not started yet — we need the
+        // 1. Start the REST API server (auth, projects, exports)
+        // ------------------------------------------------------------------
+        HttpApiServer httpApi = new HttpApiServer();
+        httpApi.start();
+
+        // ------------------------------------------------------------------
+        // 2. Create the WebSocket server (not started yet — we need the
         //    reference before connecting so we can wire the broadcast lambda)
         // ------------------------------------------------------------------
         EngineClient engine = new EngineClient();
@@ -46,7 +52,7 @@ public class Main {
         GatewayServer server = new GatewayServer(WS_PORT, engine);
 
         // ------------------------------------------------------------------
-        // 2. Connect to the C++ engine.
+        // 3. Connect to the C++ engine.
         //    The onSample lambda runs on the reader thread and broadcasts
         //    each sample directly to all connected browser WebSocket clients.
         // ------------------------------------------------------------------
@@ -59,16 +65,17 @@ public class Main {
         });
 
         // ------------------------------------------------------------------
-        // 3. Start the WebSocket server — browsers can now connect
+        // 4. Start the WebSocket server — browsers can now connect
         // ------------------------------------------------------------------
         server.start();
         System.out.println("[Gateway] Ready.");
         System.out.println("[Gateway]   WebSocket: ws://localhost:" + WS_PORT);
+        System.out.println("[Gateway]   REST API:  http://localhost:" + HTTP_PORT);
         System.out.println("[Gateway]   C++ Engine: localhost:" + ENGINE_PORT);
         System.out.println("[Gateway] Awaiting browser connections...");
 
         // ------------------------------------------------------------------
-        // 4. Shutdown hook — cleanly close everything on Ctrl+C / kill
+        // 5. Shutdown hook — cleanly close everything on Ctrl+C / kill
         // ------------------------------------------------------------------
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\n[Gateway] Shutting down...");
@@ -78,6 +85,7 @@ public class Main {
                 Thread.currentThread().interrupt();
             }
             engine.disconnect();
+            httpApi.stop(2);
             System.out.println("[Gateway] Shutdown complete.");
         }, "shutdown-hook"));
 

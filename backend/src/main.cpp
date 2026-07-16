@@ -4,7 +4,8 @@
 // Flow:
 //   1. Start TCP server on port 5050
 //   2. Wait for Java gateway to connect
-//   3. Listen for JSON commands: start, stop, config, setStepSize, setSolver
+//   3. Listen for JSON commands: start, stop, config, setStepSize, setSolver,
+//      setBlockParam, reset, set_speed, set_stop_time, get_status, ping
 //   4. Stream {type:"sample", t, sin, cos} samples back to the gateway
 //   5. Keep alive until Enter is pressed, then shut down gracefully
 //
@@ -127,6 +128,42 @@ int main() {
             if (!solver.empty()) {
                 engine.setSolver(solver);
             }
+
+        } else if (type == "setBlockParam") {
+            // Hot-update block parameters: {"type":"setBlockParam","blockId":"sine","amplitude":1.5,"frequency":10.0}
+            std::string blockId = jsonGetString(msg, "blockId");
+            double amplitude = jsonGetNumber(msg, "amplitude");
+            double frequency = jsonGetNumber(msg, "frequency");
+            engine.updateBlockParam(blockId, amplitude, frequency);
+
+        } else if (type == "reset") {
+            // Reset simulation: zero time, clear scope buffer, restart if running
+            engine.reset([&](double t, double s, double c) {
+                if (session.isConnected()) {
+                    if (t < 0.0) {
+                        // Sentinel: send reset acknowledgement instead of a sample
+                        session.sendLine(R"({"type":"reset_ack"})");
+                    } else {
+                        session.sendLine(formatSample(t, s, c));
+                    }
+                }
+            });
+
+        } else if (type == "set_speed") {
+            // Simulation speed multiplier: {"type":"set_speed","value":4.0}
+            // 0 = MAX (no sleep), 0.25 = quarter speed, 1 = real-time, 4 = 4x
+            double value = jsonGetNumber(msg, "value");
+            engine.setSpeed(value);
+
+        } else if (type == "set_stop_time") {
+            // Auto-halt when sim time reaches this value: {"type":"set_stop_time","value":10.0}
+            double value = jsonGetNumber(msg, "value");
+            engine.setStopTime(value);
+
+        } else if (type == "get_status") {
+            // Return engine status JSON to the gateway
+            std::string status = engine.getStatus();
+            session.sendLine(status);
 
         } else if (type == "ping") {
             // Health check — respond immediately

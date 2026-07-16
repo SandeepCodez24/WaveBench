@@ -1,3 +1,10 @@
 com\wavebench\gateway\EngineClient.class
 com\wavebench\gateway\GatewayServer.class
+com\wavebench\gateway\auth\JwtUtil.class
+com\wavebench\gateway\api\ExportHandler.class
+com\wavebench\gateway\HttpApiServer.class
+com\wavebench\gateway\auth\AuthHandler.class
+com\wavebench\gateway\auth\HttpApiUtils.class
+com\wavebench\gateway\auth\UserStore.class
 com\wavebench\gateway\Main.class
+com\wavebench\gateway\api\ProjectHandler.class

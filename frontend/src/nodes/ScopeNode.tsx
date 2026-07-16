@@ -27,28 +27,31 @@ export function ScopeNode({ data }: Props) {
   }, []);
 
   return (
-    <div className="flow-node" style={{ width: 304, border: '2px solid rgba(13, 148, 136, 0.2)' }}>
+    <div 
+      className="flow-node" 
+      style={{ 
+        width: 344, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        boxSizing: 'border-box',
+        border: '2px solid rgba(13, 148, 136, 0.2)',
+        padding: 0
+      }}
+    >
       {/* Node Header */}
-      <div className="node-header" style={{ justifyContent: 'space-between' }}>
+      <div className="node-header" style={{ justifyContent: 'space-between', flexShrink: 0 }}>
         <span className="material-symbols-outlined" style={{ fontSize: 14 }}>analytics</span>
         <span style={{ fontWeight: 'bold' }}>SCOPE_VIEW_01</span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <span className="material-symbols-outlined text-[14px] text-outline cursor-pointer hover:text-on-surface">open_in_full</span>
-        </div>
       </div>
 
       {/* Node Body with Scope Canvas */}
-      <div className="node-body" style={{ padding: 12 }}>
-        <ScopeCanvas samplesRef={data.samplesRef} width={280} height={160} />
-        
-        {/* Legends */}
-        <div className="scope-legend">
-          <span className="legend-badge sine">Ch1: Sine</span>
-          <span className="legend-badge cosine">Ch2: Cos</span>
+      <div className="node-body" style={{ padding: 12, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ScopeCanvas samplesRef={data.samplesRef} width={320} height={200} />
         </div>
         
         {/* Footer info */}
-        <div className="scope-footer">
+        <div className="scope-footer" style={{ flexShrink: 0, marginTop: 8 }}>
           <div className="scope-indicator-dots">
             <div className="scope-dot" style={{ backgroundColor: 'var(--primary-teal)' }}></div>
             <div className="scope-dot" style={{ backgroundColor: 'var(--secondary-amber)' }}></div>

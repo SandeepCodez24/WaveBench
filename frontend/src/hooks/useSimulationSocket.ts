@@ -58,6 +58,7 @@ export function useSimulationSocket(): SimulationSocket {
           window.dispatchEvent(new CustomEvent('simulation-sample', { detail: msg }));
         } else {
           console.log('[WS] Received message:', msg);
+          window.dispatchEvent(new CustomEvent('simulation-message', { detail: msg }));
         }
       } catch (e) {
         console.warn('[WS] Parse error:', event.data, e);
