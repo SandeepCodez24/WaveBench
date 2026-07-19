@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.UUID;
@@ -14,7 +13,7 @@ import java.util.UUID;
  *
  * <p>
  * Format of users.json:
- * 
+ *
  * <pre>
  * [
  *   {"id":"uuid","email":"a@b.com","passwordHash":"$2a$...","displayName":"Alice",

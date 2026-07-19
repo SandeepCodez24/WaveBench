@@ -8,7 +8,6 @@ import com.sun.net.httpserver.HttpHandler;
 import com.wavebench.gateway.auth.HttpApiUtils;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -18,19 +17,23 @@ import java.time.Instant;
 /**
  * ProjectHandler — REST endpoints for per-user project persistence.
  *
- * <p>Projects are stored as JSON files in {@code saved_projects/{userId}/{name}.json}.
+ * <p>
+ * Projects are stored as JSON files in
+ * {@code saved_projects/{userId}/{name}.json}.
  * This reuses the same directory structure as the existing flat-file WebSocket
  * save/load, but now scoped to the authenticated user's ID.
  *
- * <p>Routes:
+ * <p>
+ * Routes:
  * <ul>
- *   <li>{@code GET  /api/projects}        — list all projects for the user</li>
- *   <li>{@code POST /api/projects}        — save (upsert) a project</li>
- *   <li>{@code GET  /api/projects/{name}} — load a specific project</li>
- *   <li>{@code DELETE /api/projects/{name}} — delete a specific project</li>
+ * <li>{@code GET  /api/projects} — list all projects for the user</li>
+ * <li>{@code POST /api/projects} — save (upsert) a project</li>
+ * <li>{@code GET  /api/projects/{name}} — load a specific project</li>
+ * <li>{@code DELETE /api/projects/{name}} — delete a specific project</li>
  * </ul>
  *
- * <p>All endpoints require a valid Bearer JWT token.
+ * <p>
+ * All endpoints require a valid Bearer JWT token.
  */
 public class ProjectHandler implements HttpHandler {
 
@@ -47,10 +50,11 @@ public class ProjectHandler implements HttpHandler {
         }
 
         String userId = HttpApiUtils.requireAuth(exchange);
-        if (userId == null) return; // 401 already sent
+        if (userId == null)
+            return; // 401 already sent
 
         String method = exchange.getRequestMethod();
-        String path   = exchange.getRequestURI().getPath(); // e.g. /api/projects or /api/projects/MyCircuit
+        String path = exchange.getRequestURI().getPath(); // e.g. /api/projects or /api/projects/MyCircuit
 
         // Strip /api/projects prefix
         String sub = path.replaceFirst("^/api/projects/?", "");
@@ -87,9 +91,9 @@ public class ProjectHandler implements HttpHandler {
                         ObjectNode proj = (ObjectNode) MAPPER.readTree(content);
                         // Return lightweight metadata only (no full diagram blob)
                         ObjectNode meta = MAPPER.createObjectNode();
-                        meta.put("name",        f.getName().replace(".json", ""));
+                        meta.put("name", f.getName().replace(".json", ""));
                         meta.put("description", proj.path("description").asText(""));
-                        meta.put("updatedAt",   proj.path("updatedAt").asText(Instant.now().toString()));
+                        meta.put("updatedAt", proj.path("updatedAt").asText(Instant.now().toString()));
                         projects.add(meta);
                     } catch (Exception e) {
                         // Skip corrupt files silently
@@ -131,10 +135,12 @@ public class ProjectHandler implements HttpHandler {
         }
 
         body.put("updatedAt", Instant.now().toString());
-        if (!body.has("createdAt")) body.put("createdAt", Instant.now().toString());
+        if (!body.has("createdAt"))
+            body.put("createdAt", Instant.now().toString());
 
         File dir = userDir(userId);
-        if (!dir.exists()) dir.mkdirs();
+        if (!dir.exists())
+            dir.mkdirs();
 
         File file = new File(dir, name + ".json");
         try (java.io.BufferedWriter writer = Files.newBufferedWriter(file.toPath(), StandardCharsets.UTF_8)) {
@@ -143,7 +149,7 @@ public class ProjectHandler implements HttpHandler {
 
         System.out.println("[Projects] Saved project '" + name + "' for user " + userId);
         HttpApiUtils.sendJson(exchange, 200,
-            "{\"status\":\"saved\",\"name\":\"" + name + "\"}");
+                "{\"status\":\"saved\",\"name\":\"" + name + "\"}");
     }
 
     // -------------------------------------------------------------------------

@@ -7,10 +7,7 @@ import org.java_websocket.server.WebSocketServer;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,13 +15,16 @@ import java.util.List;
  * GatewayServer — WebSocket server that acts as the protocol bridge between
  * browser clients and the C++ simulation engine.
  *
- * <p>Data flow:
+ * <p>
+ * Data flow:
+ * 
  * <pre>
  *   Browser  --[WS JSON command]-->  GatewayServer.onMessage()  --> EngineClient.send()  --> C++
  *   C++      --[TCP JSON sample]-->  EngineClient reader thread  --> GatewayServer.broadcastSample()  --> All browsers
  * </pre>
  *
- * <p>The server listens on {@code ws://localhost:8080}.  Multiple browser tabs
+ * <p>
+ * The server listens on {@code ws://localhost:8080}. Multiple browser tabs
  * can connect simultaneously; all receive the same sample stream.
  */
 public class GatewayServer extends WebSocketServer {
@@ -37,16 +37,16 @@ public class GatewayServer extends WebSocketServer {
     // -------------------------------------------------------------------------
 
     /**
-     * @param port    WebSocket port (8080)
-     * @param engine  connected {@link EngineClient} — must already be connected
-     *                (or connecting) before {@link #start()} is called
+     * @param port   WebSocket port (8080)
+     * @param engine connected {@link EngineClient} — must already be connected
+     *               (or connecting) before {@link #start()} is called
      */
     public GatewayServer(int port, EngineClient engine) {
         super(new InetSocketAddress(port));
         this.engine = engine;
-        setReuseAddr(true);          // allow quick restart without "address already in use"
+        setReuseAddr(true); // allow quick restart without "address already in use"
         setConnectionLostTimeout(30); // ping browsers every 30 s to keep connections alive
-        
+
         // Wire up the engine client's log callback to broadcast to websocket clients
         this.engine.setLogCallback(this::broadcast);
     }
@@ -69,14 +69,15 @@ public class GatewayServer extends WebSocketServer {
      * Called whenever a browser sends a JSON message.
      * All commands are forwarded verbatim to the C++ engine over TCP.
      *
-     * <p>Expected message types:
+     * <p>
+     * Expected message types:
      * <ul>
-     *   <li>{@code {"type":"start"}}</li>
-     *   <li>{@code {"type":"stop"}}</li>
-     *   <li>{@code {"type":"config","stepSize":0.02,"solver":"RK4"}}</li>
-     *   <li>{@code {"type":"setStepSize","value":0.05}}</li>
-     *   <li>{@code {"type":"setSolver","value":"Euler"}}</li>
-     *   <li>{@code {"type":"ping"}}</li>
+     * <li>{@code {"type":"start"}}</li>
+     * <li>{@code {"type":"stop"}}</li>
+     * <li>{@code {"type":"config","stepSize":0.02,"solver":"RK4"}}</li>
+     * <li>{@code {"type":"setStepSize","value":0.05}}</li>
+     * <li>{@code {"type":"setSolver","value":"Euler"}}</li>
+     * <li>{@code {"type":"ping"}}</li>
      * </ul>
      */
     @Override
@@ -119,9 +120,8 @@ public class GatewayServer extends WebSocketServer {
         long uptimeMs = System.currentTimeMillis() - startTimeMs;
         int clients = getConnections().size();
         String response = String.format(
-            "{\"type\":\"diagnostics\",\"gatewayUptimeMs\":%d,\"connectedClients\":%d,\"gatewayVersion\":\"1.0.0\"}",
-            uptimeMs, clients
-        );
+                "{\"type\":\"diagnostics\",\"gatewayUptimeMs\":%d,\"connectedClients\":%d,\"gatewayVersion\":\"1.0.0\"}",
+                uptimeMs, clients);
         conn.send(response);
         System.out.println("[Gateway] Sent diagnostics to client.");
     }
@@ -148,7 +148,8 @@ public class GatewayServer extends WebSocketServer {
             }
 
             File file = new File(dir, name + ".json");
-            try (java.io.BufferedWriter writer = java.nio.file.Files.newBufferedWriter(file.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
+            try (java.io.BufferedWriter writer = java.nio.file.Files.newBufferedWriter(file.toPath(),
+                    java.nio.charset.StandardCharsets.UTF_8)) {
                 writer.write(message);
             }
             System.out.println("[Gateway] Saved project: " + file.getAbsolutePath());
@@ -220,7 +221,8 @@ public class GatewayServer extends WebSocketServer {
         }
         pos += needle.length();
         int end = json.indexOf("\"", pos);
-        if (end == -1) return null;
+        if (end == -1)
+            return null;
         return json.substring(pos, end);
     }
 
@@ -242,14 +244,15 @@ public class GatewayServer extends WebSocketServer {
      * Broadcast a JSON sample string to every connected browser.
      * Called from the EngineClient's reader thread each time C++ sends a sample.
      *
-     * @param json  a complete JSON sample, e.g.
-     *              {@code {"type":"sample","t":0.02,"sin":0.02,"cos":0.9998}}
+     * @param json a complete JSON sample, e.g.
+     *             {@code {"type":"sample","t":0.02,"sin":0.02,"cos":0.9998}}
      */
     public void broadcastSample(String json) {
         Collection<WebSocket> clients = getConnections();
-        if (clients.isEmpty()) return;   // no browsers — avoid unnecessary work
+        if (clients.isEmpty())
+            return; // no browsers — avoid unnecessary work
 
-        broadcast(json);                 // thread-safe broadcast provided by java_websocket
+        broadcast(json); // thread-safe broadcast provided by java_websocket
     }
 
     /**
@@ -258,7 +261,8 @@ public class GatewayServer extends WebSocketServer {
      * it is wrapped inside a JSON log envelope.
      */
     public void broadcastLog(String rawLine) {
-        if (rawLine == null || rawLine.trim().isEmpty()) return;
+        if (rawLine == null || rawLine.trim().isEmpty())
+            return;
 
         String formattedLog;
         String trimmed = rawLine.trim();
@@ -268,9 +272,8 @@ public class GatewayServer extends WebSocketServer {
         } else {
             String escaped = trimmed.replace("\\", "\\\\").replace("\"", "\\\"");
             formattedLog = String.format(
-                "{\"type\":\"log\",\"level\":\"info\",\"src\":\"engine\",\"msg\":\"%s\"}",
-                escaped
-            );
+                    "{\"type\":\"log\",\"level\":\"info\",\"src\":\"engine\",\"msg\":\"%s\"}",
+                    escaped);
         }
         broadcast(formattedLog);
     }
@@ -280,9 +283,8 @@ public class GatewayServer extends WebSocketServer {
      */
     public void logAndBroadcast(String level, String msg) {
         String json = String.format(
-            "{\"type\":\"log\",\"level\":\"%s\",\"src\":\"gateway\",\"msg\":\"%s\"}",
-            level, msg.replace("\\", "\\\\").replace("\"", "\\\"")
-        );
+                "{\"type\":\"log\",\"level\":\"%s\",\"src\":\"gateway\",\"msg\":\"%s\"}",
+                level, msg.replace("\\", "\\\\").replace("\"", "\\\""));
         broadcast(json);
         System.out.printf("[%s] GATEWAY  %s%n", level.toUpperCase(), msg);
     }

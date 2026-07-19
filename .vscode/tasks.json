@@ -6,7 +6,7 @@
       "type": "shell",
       "command": "g++ -std=c++17 -O2 backend/src/*.cpp -lws2_32 -o backend/build/wavebench_engine.exe",
       "windows": {
-        "command": "powershell -Command \"mkdir -Force backend/build; g++ -std=c++17 -O2 backend/src/*.cpp -lws2_32 -o backend/build/wavebench_engine.exe\""
+        "command": "powershell -Command \"mkdir -Force backend/build; $env:Path = 'C:\\Users\\sande\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin;' + $env:Path; g++ -std=c++17 -O2 -static backend/src/*.cpp -lws2_32 -o backend/build/wavebench_engine.exe\""
       },
       "osx": {
         "command": "mkdir -p backend/build && g++ -std=c++17 -O2 backend/src/*.cpp -o backend/build/wavebench_engine"

@@ -27,15 +27,15 @@ public class Main {
         Process cppProcess = null;
         try {
             String os = System.getProperty("os.name").toLowerCase();
-            String exePath = os.contains("win") ? "build\\wavebench_engine.exe" : "./build/wavebench_engine";
             File exeFile = new File("backend", os.contains("win") ? "build\\wavebench_engine.exe" : "build/wavebench_engine");
             
             if (!exeFile.exists()) {
                 System.err.println("[Gateway] ERROR: C++ Engine executable not found at: " + exeFile.getAbsolutePath());
             } else {
                 System.out.println("[Gateway] Starting C++ Engine subprocess at: " + exeFile.getAbsolutePath());
-                ProcessBuilder pb = new ProcessBuilder(exePath);
-                pb.directory(new File("backend"));
+                ProcessBuilder pb = new ProcessBuilder(exeFile.getAbsolutePath());
+                pb.directory(exeFile.getParentFile());
+                pb.inheritIO();
                 cppProcess = pb.start();
                 System.out.println("[Gateway] C++ Engine subprocess spawned successfully.");
             }
