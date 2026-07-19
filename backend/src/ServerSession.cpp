@@ -1,8 +1,8 @@
 // ============================================================================
-// ServerSession.cpp — Winsock2 TCP server implementation.
+// ServerSession.cpp — Cross-platform TCP server implementation.
 //
 // Handles the full lifecycle:
-//   1. WSAStartup / WSACleanup
+//   1. Platform init (WSAStartup on Windows, no-op on POSIX)
 //   2. Socket creation, bind, listen
 //   3. Blocking accept (waits for Java gateway)
 //   4. Background receive thread (newline-delimited JSON parsing)
@@ -10,7 +10,7 @@
 //   6. Graceful shutdown with proper socket cleanup
 //
 // Error handling:
-//   - All Winsock calls are checked for errors
+//   - All socket calls are checked for errors
 //   - SO_REUSEADDR is set so the port can be rebound quickly after restart
 //   - recv loop handles partial reads and TCP message framing correctly
 // ============================================================================
@@ -19,14 +19,43 @@
 #include <iostream>
 #include <thread>
 
+// ---- Platform helpers -------------------------------------------------------
+
+#ifdef _WIN32
+  #define SOCK_ERR       SOCKET_ERROR
+  #define GET_ERR()      WSAGetLastError()
+  #define ERR_RESET      WSAECONNRESET
+  #define ERR_INTR       WSAEINTR
+  #define SHUT_BOTH      SD_BOTH
+#else
+  #define SOCK_ERR       (-1)
+  #define GET_ERR()      errno
+  #define ERR_RESET      ECONNRESET
+  #define ERR_INTR       EINTR
+  #define SHUT_BOTH      SHUT_RDWR
+#endif
+
+// Close a socket portably
+void ServerSession::closeSocket(socket_t s) {
+#ifdef _WIN32
+    closesocket(s);
+#else
+    ::close(s);
+#endif
+}
+
+// ---- Constructor / Destructor -----------------------------------------------
+
 ServerSession::ServerSession() = default;
 
 ServerSession::~ServerSession() {
     close();
 }
 
+// ---- listen -----------------------------------------------------------------
+
 bool ServerSession::listen(int port) {
-    // Initialize Winsock
+#ifdef _WIN32
     WSADATA wsa;
     int result = WSAStartup(MAKEWORD(2, 2), &wsa);
     if (result != 0) {
@@ -34,14 +63,16 @@ bool ServerSession::listen(int port) {
         return false;
     }
     wsaInitialized_ = true;
+#endif
 
     // Create the listening socket
     serverSock_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (serverSock_ == INVALID_SOCKET) {
-        std::cerr << "[C++] socket() failed with error: "
-                  << WSAGetLastError() << "\n";
+    if (serverSock_ == INVALID_SOCK) {
+        std::cerr << "[C++] socket() failed with error: " << GET_ERR() << "\n";
+#ifdef _WIN32
         WSACleanup();
         wsaInitialized_ = false;
+#endif
         return false;
     }
 
@@ -54,43 +85,46 @@ bool ServerSession::listen(int port) {
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port        = htons(static_cast<u_short>(port));
+    addr.sin_port        = htons(static_cast<uint16_t>(port));
 
     if (bind(serverSock_, reinterpret_cast<sockaddr*>(&addr),
-             sizeof(addr)) == SOCKET_ERROR) {
-        std::cerr << "[C++] bind() failed with error: "
-                  << WSAGetLastError() << "\n";
-        closesocket(serverSock_);
-        serverSock_ = INVALID_SOCKET;
+             sizeof(addr)) == SOCK_ERR) {
+        std::cerr << "[C++] bind() failed with error: " << GET_ERR() << "\n";
+        closeSocket(serverSock_);
+        serverSock_ = INVALID_SOCK;
+#ifdef _WIN32
         WSACleanup();
         wsaInitialized_ = false;
+#endif
         return false;
     }
 
     // Start listening (backlog of 1 — only one gateway connects)
-    if (::listen(serverSock_, 1) == SOCKET_ERROR) {
-        std::cerr << "[C++] listen() failed with error: "
-                  << WSAGetLastError() << "\n";
-        closesocket(serverSock_);
-        serverSock_ = INVALID_SOCKET;
+    if (::listen(serverSock_, 1) == SOCK_ERR) {
+        std::cerr << "[C++] listen() failed with error: " << GET_ERR() << "\n";
+        closeSocket(serverSock_);
+        serverSock_ = INVALID_SOCK;
+#ifdef _WIN32
         WSACleanup();
         wsaInitialized_ = false;
+#endif
         return false;
     }
 
     return true;
 }
 
+// ---- acceptClient -----------------------------------------------------------
+
 bool ServerSession::acceptClient() {
-    if (serverSock_ == INVALID_SOCKET) {
+    if (serverSock_ == INVALID_SOCK) {
         std::cerr << "[C++] Cannot accept — server socket not initialized.\n";
         return false;
     }
 
     clientSock_ = accept(serverSock_, nullptr, nullptr);
-    if (clientSock_ == INVALID_SOCKET) {
-        std::cerr << "[C++] accept() failed with error: "
-                  << WSAGetLastError() << "\n";
+    if (clientSock_ == INVALID_SOCK) {
+        std::cerr << "[C++] accept() failed with error: " << GET_ERR() << "\n";
         return false;
     }
 
@@ -104,6 +138,8 @@ bool ServerSession::acceptClient() {
     return true;
 }
 
+// ---- startReceiving ---------------------------------------------------------
+
 void ServerSession::startReceiving(MessageHandler handler) {
     std::thread([this, handler]() {
         constexpr int BUF_SIZE = 4096;
@@ -111,16 +147,20 @@ void ServerSession::startReceiving(MessageHandler handler) {
         std::string partial;
 
         while (connected_) {
+#ifdef _WIN32
             int bytesRead = recv(clientSock_, buf, BUF_SIZE - 1, 0);
+#else
+            ssize_t bytesRead = recv(clientSock_, buf, BUF_SIZE - 1, 0);
+#endif
 
             if (bytesRead <= 0) {
                 // Connection closed or error
                 if (bytesRead == 0) {
                     std::cout << "[C++] Gateway disconnected gracefully.\n";
                 } else {
-                    int err = WSAGetLastError();
-                    // WSAECONNRESET = 10054, normal during shutdown
-                    if (err != WSAECONNRESET && err != WSAEINTR) {
+                    int err = GET_ERR();
+                    // ECONNRESET / WSAECONNRESET is normal during shutdown
+                    if (err != ERR_RESET && err != ERR_INTR) {
                         std::cerr << "[C++] recv() error: " << err << "\n";
                     }
                 }
@@ -152,10 +192,12 @@ void ServerSession::startReceiving(MessageHandler handler) {
     }).detach();
 }
 
+// ---- sendLine ---------------------------------------------------------------
+
 void ServerSession::sendLine(const std::string& json) {
     std::lock_guard<std::mutex> lock(sendMutex_);
 
-    if (!connected_ || clientSock_ == INVALID_SOCKET) {
+    if (!connected_ || clientSock_ == INVALID_SOCK) {
         return; // Silently drop if not connected
     }
 
@@ -165,37 +207,46 @@ void ServerSession::sendLine(const std::string& json) {
 
     // Send loop handles partial sends (unlikely on localhost but correct)
     while (remaining > 0) {
+#ifdef _WIN32
         int sent = send(clientSock_, data, remaining, 0);
-        if (sent == SOCKET_ERROR) {
-            int err = WSAGetLastError();
-            if (err != WSAECONNRESET) {
+        if (sent == SOCK_ERR) {
+#else
+        ssize_t sent = send(clientSock_, data, static_cast<size_t>(remaining), 0);
+        if (sent == SOCK_ERR) {
+#endif
+            int err = GET_ERR();
+            if (err != ERR_RESET) {
                 std::cerr << "[C++] send() error: " << err << "\n";
             }
             connected_ = false;
             break;
         }
         data      += sent;
-        remaining -= sent;
+        remaining -= static_cast<int>(sent);
     }
 }
+
+// ---- close ------------------------------------------------------------------
 
 void ServerSession::close() {
     connected_ = false;
 
-    if (clientSock_ != INVALID_SOCKET) {
+    if (clientSock_ != INVALID_SOCK) {
         // Graceful shutdown: signal no more sends, then close
-        shutdown(clientSock_, SD_BOTH);
-        closesocket(clientSock_);
-        clientSock_ = INVALID_SOCKET;
+        shutdown(clientSock_, SHUT_BOTH);
+        closeSocket(clientSock_);
+        clientSock_ = INVALID_SOCK;
     }
 
-    if (serverSock_ != INVALID_SOCKET) {
-        closesocket(serverSock_);
-        serverSock_ = INVALID_SOCKET;
+    if (serverSock_ != INVALID_SOCK) {
+        closeSocket(serverSock_);
+        serverSock_ = INVALID_SOCK;
     }
 
+#ifdef _WIN32
     if (wsaInitialized_) {
         WSACleanup();
         wsaInitialized_ = false;
     }
+#endif
 }

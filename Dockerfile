@@ -14,6 +14,7 @@ COPY backend/src/ ./backend/src/
 RUN mkdir -p backend/build && \
     g++ -std=c++17 -O2 -static-libgcc -static-libstdc++ \
         backend/src/*.cpp \
+        -lpthread \
         -o backend/build/wavebench_engine
 
 # ============================================================
