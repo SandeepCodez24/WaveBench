@@ -1,41 +1,64 @@
+type Category = 'all' | 'sources' | 'sinks' | 'signals' | 'logic' | 'math';
+
 interface Props {
-  isModelBrowserOpen: boolean;
-  onToggleModelBrowser: () => void;
+  activePanelCategory: Category | null;
+  onOpenPanel: (category: Category) => void;
+  onClosePanel: () => void;
+  onToggleDiagnostics?: () => void;
 }
 
-export function Sidebar({ isModelBrowserOpen, onToggleModelBrowser }: Props) {
+const RAIL_ITEMS = [
+  {
+    id: 'pointer',
+    icon: 'near_me',
+    label: 'Pointer',
+    category: null as Category | null,
+    title: 'Select / Move tool'
+  },
+  {
+    id: 'blocks',
+    icon: 'extension',
+    label: 'Blocks',
+    category: 'all' as Category,
+    title: 'Block Library'
+  },
+];
+
+export function Sidebar({ activePanelCategory, onOpenPanel, onClosePanel, onToggleDiagnostics }: Props) {
+  const handleClick = (item: typeof RAIL_ITEMS[0]) => {
+    if (item.category === null) return; // Pointer — no panel
+    if (activePanelCategory === item.category) {
+      onClosePanel(); // toggle off
+    } else {
+      onOpenPanel(item.category);
+    }
+  };
+
   return (
     <aside className="side-rail">
       {/* Top Menu Items */}
       <div className="rail-group">
-        <button className="rail-item">
-          <span className="material-symbols-outlined">near_me</span>
-          <span className="rail-label">Pointer</span>
-        </button>
-        <button 
-          className={`rail-item ${isModelBrowserOpen ? 'active' : ''}`}
-          onClick={onToggleModelBrowser}
-        >
-          <span className="material-symbols-outlined filled">extension</span>
-          <span className="rail-label">Blocks</span>
-        </button>
-        <button className="rail-item">
-          <span className="material-symbols-outlined">timeline</span>
-          <span className="rail-label">Signals</span>
-        </button>
-        <button className="rail-item">
-          <span className="material-symbols-outlined">account_tree</span>
-          <span className="rail-label">Logic</span>
-        </button>
+        {RAIL_ITEMS.map(item => {
+          const isActive = item.category !== null && activePanelCategory === item.category;
+          return (
+            <button
+              key={item.id}
+              className={`rail-item ${isActive ? 'active' : ''}`}
+              title={item.title}
+              onClick={() => handleClick(item)}
+            >
+              <span className={`material-symbols-outlined${isActive ? ' filled' : ''}`}>
+                {item.icon}
+              </span>
+              <span className="rail-label">{item.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Bottom Menu Items */}
       <div className="rail-group">
-        <button className="rail-item">
-          <span className="material-symbols-outlined">help</span>
-          <span className="rail-label">Help</span>
-        </button>
-        <button className="rail-item">
+        <button className="rail-item" title="Diagnostics / Logs" onClick={onToggleDiagnostics}>
           <span className="material-symbols-outlined">terminal</span>
           <span className="rail-label">Logs</span>
         </button>

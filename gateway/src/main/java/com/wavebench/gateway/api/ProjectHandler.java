@@ -82,7 +82,9 @@ public class ProjectHandler implements HttpHandler {
             if (files != null) {
                 for (File f : files) {
                     try {
-                        ObjectNode proj = (ObjectNode) MAPPER.readTree(f);
+                        byte[] bytes = Files.readAllBytes(f.toPath());
+                        String content = new String(bytes, StandardCharsets.UTF_8);
+                        ObjectNode proj = (ObjectNode) MAPPER.readTree(content);
                         // Return lightweight metadata only (no full diagram blob)
                         ObjectNode meta = MAPPER.createObjectNode();
                         meta.put("name",        f.getName().replace(".json", ""));
@@ -135,8 +137,8 @@ public class ProjectHandler implements HttpHandler {
         if (!dir.exists()) dir.mkdirs();
 
         File file = new File(dir, name + ".json");
-        try (FileWriter fw = new FileWriter(file)) {
-            fw.write(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(body));
+        try (java.io.BufferedWriter writer = Files.newBufferedWriter(file.toPath(), StandardCharsets.UTF_8)) {
+            writer.write(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(body));
         }
 
         System.out.println("[Projects] Saved project '" + name + "' for user " + userId);
@@ -156,7 +158,8 @@ public class ProjectHandler implements HttpHandler {
             return;
         }
 
-        String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        byte[] bytes = Files.readAllBytes(file.toPath());
+        String content = new String(bytes, StandardCharsets.UTF_8);
         System.out.println("[Projects] Loaded project '" + name + "' for user " + userId);
         HttpApiUtils.sendJson(exchange, 200, content);
     }

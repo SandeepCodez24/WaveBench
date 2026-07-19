@@ -4,9 +4,10 @@ interface Props {
   initialName: string;
   onClose: () => void;
   onSave: (name: string) => Promise<void>;
+  isSaveAs?: boolean;
 }
 
-export function SaveProjectDialog({ initialName, onClose, onSave }: Props) {
+export function SaveProjectDialog({ initialName, onClose, onSave, isSaveAs }: Props) {
   const [name, setName] = useState(initialName || 'My Project');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -71,7 +72,7 @@ export function SaveProjectDialog({ initialName, onClose, onSave }: Props) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="material-symbols-outlined" style={{ color: '#00685f', fontSize: 20 }}>save</span>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#111c2d' }}>Save Project</h3>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#111c2d' }}>{isSaveAs ? 'Save Project As' : 'Save Project'}</h3>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6d7a77', padding: 4 }}>
             <span className="material-symbols-outlined" style={{ fontSize: 20 }}>close</span>
@@ -151,7 +152,7 @@ export function SaveProjectDialog({ initialName, onClose, onSave }: Props) {
                   Saving...
                 </>
               ) : (
-                'Save Project'
+                isSaveAs ? 'Save As' : 'Save Project'
               )}
             </button>
           </div>

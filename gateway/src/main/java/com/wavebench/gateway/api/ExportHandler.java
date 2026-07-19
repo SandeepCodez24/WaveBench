@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.wavebench.gateway.auth.HttpApiUtils;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -22,14 +21,17 @@ import java.util.Map;
 /**
  * ExportHandler — REST endpoints for logging and retrieving export history.
  *
- * <p>Each export record (scope PNG, data CSV, HTML report) is appended as a
+ * <p>
+ * Each export record (scope PNG, data CSV, HTML report) is appended as a
  * newline-delimited JSON entry to {@code exports.log}. Records are indexed
  * by {@code userId} so each user sees only their own history.
  *
- * <p>Routes:
+ * <p>
+ * Routes:
  * <ul>
- *   <li>{@code POST /api/exports} — append a new export record</li>
- *   <li>{@code GET  /api/exports} — return last 50 export records for the user</li>
+ * <li>{@code POST /api/exports} — append a new export record</li>
+ * <li>{@code GET  /api/exports} — return last 50 export records for the
+ * user</li>
  * </ul>
  */
 public class ExportHandler implements HttpHandler {
@@ -49,7 +51,8 @@ public class ExportHandler implements HttpHandler {
         }
 
         String userId = HttpApiUtils.requireAuth(exchange);
-        if (userId == null) return;
+        if (userId == null)
+            return;
 
         String method = exchange.getRequestMethod();
 
@@ -76,9 +79,9 @@ public class ExportHandler implements HttpHandler {
             return;
         }
 
-        String type      = str(body, "type");      // scope_png / data_csv / report_html
+        String type = str(body, "type"); // scope_png / data_csv / report_html
         String projectId = str(body, "projectId"); // project name/id
-        String fileUrl   = str(body, "fileUrl");   // URL or path reference
+        String fileUrl = str(body, "fileUrl"); // URL or path reference
 
         if (type == null || fileUrl == null) {
             HttpApiUtils.sendJson(exchange, 400, "{\"error\":\"type and fileUrl required\"}");
@@ -86,15 +89,20 @@ public class ExportHandler implements HttpHandler {
         }
 
         ObjectNode record = MAPPER.createObjectNode();
-        record.put("userId",    userId);
-        record.put("type",      type);
+        record.put("userId", userId);
+        record.put("type", type);
         record.put("projectId", projectId == null ? "" : projectId);
-        record.put("fileUrl",   fileUrl);
+        record.put("fileUrl", fileUrl);
         record.put("createdAt", Instant.now().toString());
 
         // Append record to log file (thread-safe)
         synchronized (FILE_LOCK) {
-            try (PrintWriter pw = new PrintWriter(new FileWriter(LOG_FILE, true))) {
+            try (java.io.PrintWriter pw = new java.io.PrintWriter(
+                    java.nio.file.Files.newBufferedWriter(
+                            java.nio.file.Paths.get(LOG_FILE),
+                            java.nio.charset.StandardCharsets.UTF_8,
+                            java.nio.file.StandardOpenOption.CREATE,
+                            java.nio.file.StandardOpenOption.APPEND))) {
                 pw.println(record);
             }
         }
@@ -117,13 +125,15 @@ public class ExportHandler implements HttpHandler {
                 // Collect user's records (most recent last — read all, filter, take tail)
                 List<ObjectNode> userRecords = new ArrayList<>();
                 for (String line : lines) {
-                    if (line.isBlank()) continue;
+                    if (line.isBlank())
+                        continue;
                     try {
                         ObjectNode rec = (ObjectNode) MAPPER.readTree(line);
                         if (userId.equals(rec.path("userId").asText())) {
                             userRecords.add(rec);
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                 }
 
                 // Return at most MAX_RECORDS from the end

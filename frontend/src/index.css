@@ -153,21 +153,22 @@ body {
   }
 }
 
-/* Custom Canvas Grid Pattern */
-.canvas-grid {
-  background-size: 40px 40px;
-  background-image: 
-    linear-gradient(to right, rgba(109, 122, 119, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(109, 122, 119, 0.05) 1px, transparent 1px);
-}
+/* Grid is rendered entirely by the React Flow <Background> SVG layer (see App.tsx). */
 
 /* React Flow customizations */
 .react-flow__viewport {
   transition: none !important;
 }
 
+/* Keep the canvas background matching the theme surface.
+   Do NOT set a solid color here — it would paint over the SVG grid layer. */
 .react-flow__background {
-  background-color: var(--surface-bright) !important;
+  background-color: var(--surface-bright);
+}
+
+/* Ensure the SVG pattern inside the background is not clipped or hidden */
+.react-flow__background > svg {
+  overflow: visible;
 }
 
 .react-flow__controls {
@@ -190,10 +191,9 @@ body {
 }
 
 .react-flow__minimap {
-  border: 1px solid var(--outline-variant) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
-  background: var(--surface-container-lowest) !important;
+  /* All visual styling is controlled via inline style prop on the MiniMap component.
+     No !important here so those inline styles (border, background, etc.) are not overridden. */
+  overflow: hidden;
 }
 
 /* Logic Nodes (Cards) Styling */
@@ -405,7 +405,7 @@ body {
   align-items: center;
   padding: var(--md) 0;
   z-index: 40;
-  height: calc(100vh - 48px);
+  height: 100%;
 }
 
 .rail-group {
@@ -452,10 +452,10 @@ body {
 
 /* MODEL BROWSER (SLIDE OUT PANEL) */
 .model-browser-panel {
-  position: fixed;
+  position: absolute;
   left: 64px;
-  top: 48px;
-  height: calc(100vh - 48px);
+  top: 0;
+  bottom: 0;
   width: 260px;
   background-color: var(--surface-container-low);
   border-right: 1px solid var(--outline-variant);
@@ -524,6 +524,41 @@ body {
   transform: translateY(-50%);
   color: var(--outline);
   font-size: 18px;
+}
+
+.category-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+  margin-top: 4px;
+}
+
+.category-pill {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--outline-variant);
+  background-color: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.category-pill:hover {
+  color: var(--primary-teal);
+  background-color: rgba(13, 148, 136, 0.05);
+  border-color: var(--primary-teal);
+}
+
+.category-pill.active {
+  color: #ffffff;
+  background-color: var(--primary-teal);
+  border-color: var(--primary-teal);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.25);
 }
 
 .details-group {
@@ -1067,6 +1102,47 @@ details[open] .details-summary span.arrow {
 .legend-badge.cosine {
   color: var(--secondary-amber);
   background-color: rgba(217, 119, 6, 0.05);
+}
+
+.scope-tabs {
+  display: flex;
+  background-color: var(--surface-container-low);
+  border-bottom: 1px solid var(--outline-variant);
+  padding: 4px 8px;
+  gap: 4px;
+}
+
+.scope-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scope-tab:hover {
+  background-color: rgba(13, 148, 136, 0.05);
+  color: var(--on-surface);
+}
+
+.scope-tab-active {
+  background-color: var(--surface-container-lowest);
+  color: var(--primary-teal);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-color: rgba(13, 148, 136, 0.15);
+}
+
+.scope-tab .material-symbols-outlined {
+  font-size: 13px !important;
 }
 
 .scope-footer {
@@ -1926,6 +2002,11 @@ details[open] .details-summary span.arrow {
   padding-left: 24px;
   font-weight: normal;
   letter-spacing: 0.02em;
+}
+
+.quick-add-item:hover {
+  background-color: #007acc !important;
+  color: #ffffff !important;
 }
 
 

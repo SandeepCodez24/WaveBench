@@ -19,11 +19,13 @@
 
 #include "SimulationEngine.hpp"
 #include "Block.hpp"
+#include "Logger.hpp"
 #include <chrono>
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <cmath>
 
 SimulationEngine::SimulationEngine() = default;
 
@@ -39,39 +41,37 @@ void SimulationEngine::configure(double stepSize, const std::string& solver) {
     if (!solver.empty()) {
         solver_ = solver;
     }
-    std::cout << "[C++] Configured: stepSize=" << stepSize_
-              << " solver=" << solver_ << "\n";
+    logMessage("info", "Configured: stepSize=" + std::to_string(stepSize_) + " solver=" + solver_);
 }
 
 void SimulationEngine::setStepSize(double stepSize) {
     if (stepSize <= 0.0) {
-        std::cerr << "[C++] Ignoring invalid step size: " << stepSize << "\n";
+        logMessage("warning", "Ignoring invalid step size: " + std::to_string(stepSize));
         return;
     }
     std::lock_guard<std::mutex> lock(configMutex_);
     stepSize_ = stepSize;
-    std::cout << "[C++] Step size updated to " << stepSize_ << "\n";
+    logMessage("info", "Step size updated to " + std::to_string(stepSize_));
 }
 
 void SimulationEngine::setSolver(const std::string& solver) {
     if (solver.empty()) return;
     std::lock_guard<std::mutex> lock(configMutex_);
     solver_ = solver;
-    std::cout << "[C++] Solver updated to " << solver_ << "\n";
+    logMessage("info", "Solver updated to " + solver_);
 }
 
 void SimulationEngine::setStopTime(double stopTime) {
     std::lock_guard<std::mutex> lock(configMutex_);
     stopTime_ = (stopTime >= 0.0) ? stopTime : 0.0;
-    std::cout << "[C++] Stop time set to " << stopTime_ << " seconds\n";
+    logMessage("info", "Stop time set to " + std::to_string(stopTime_) + " seconds");
 }
 
 void SimulationEngine::setSpeed(double multiplier) {
     std::lock_guard<std::mutex> lock(configMutex_);
-    // 0 means MAX (no sleep). Otherwise clamp to sensible range.
     if (multiplier < 0.0) multiplier = 1.0;
     speed_ = multiplier;
-    std::cout << "[C++] Simulation speed set to " << speed_ << "x\n";
+    logMessage("info", "Simulation speed set to " + std::to_string(speed_) + "x");
 }
 
 void SimulationEngine::updateBlockParam(const std::string& blockId, double amp, double freq) {
@@ -79,21 +79,20 @@ void SimulationEngine::updateBlockParam(const std::string& blockId, double amp, 
     if (blockId == "sine") {
         sineAmplitude_ = amp;
         sineFrequency_ = freq;
-        std::cout << "[C++] Sine block updated: Amplitude=" << amp << " Frequency=" << freq << "\n";
+        logMessage("info", "Sine block updated: Amplitude=" + std::to_string(amp) + " Frequency=" + std::to_string(freq));
     } else if (blockId == "cosine") {
         cosineAmplitude_ = amp;
         cosineFrequency_ = freq;
-        std::cout << "[C++] Cosine block updated: Amplitude=" << amp << " Frequency=" << freq << "\n";
+        logMessage("info", "Cosine block updated: Amplitude=" + std::to_string(amp) + " Frequency=" + std::to_string(freq));
     }
 }
 
 void SimulationEngine::reset(SampleCallback cb) {
-    // If running, stop the loop first, then notify the frontend
     bool wasRunning = running_.load();
     if (wasRunning) {
         stop();
     }
-    std::cout << "[C++] Simulation reset.\n";
+    logMessage("info", "Simulation reset");
     // Notify browser via the callback with a sentinel t=-1 value
     if (cb) {
         cb(-1.0, 0.0, 0.0); // frontend interprets t<0 as reset_ack
@@ -130,14 +129,17 @@ void SimulationEngine::start(SampleCallback cb) {
         CosineBlock cosine(&clock);
 
         double t = 0.0;
-        std::cout << "[C++] Simulation started. Logging to simulation_run.csv\n";
+        logMessage("info", "Simulation started. Logging to simulation_run.csv");
 
         std::ofstream csvFile("simulation_run.csv");
         if (csvFile.is_open()) {
             csvFile << "t,sin,cos\n";
         } else {
-            std::cerr << "[C++] Warning: Could not open simulation_run.csv for writing.\n";
+            logMessage("warning", "Could not open simulation_run.csv for writing");
         }
+
+        bool sineNanLogged = false;
+        bool cosineNanLogged = false;
 
         while (running_) {
             // Read current config and parameters under lock
@@ -156,7 +158,7 @@ void SimulationEngine::start(SampleCallback cb) {
 
             // Auto-halt when stop time is reached (0 = run forever)
             if (currentStopTime > 0.0 && t >= currentStopTime) {
-                std::cout << "[C++] Stop time reached (" << currentStopTime << "s). Halting.\n";
+                logMessage("info", "Stop time reached (" + std::to_string(currentStopTime) + "s). Halting.");
                 running_ = false;
                 break;
             }
@@ -164,6 +166,25 @@ void SimulationEngine::start(SampleCallback cb) {
             // Evaluate the block graph at current time with dynamic parameters
             double sinV = sinAmp * std::sin(sinFreq * t);
             double cosV = cosAmp * std::cos(cosFreq * t);
+
+            // Numerical checks for NaN (Simulink style)
+            if (std::isnan(sinV)) {
+                if (!sineNanLogged) {
+                    logMessage("warning", "Sine block output: NaN detected", "sine");
+                    sineNanLogged = true;
+                }
+            } else {
+                sineNanLogged = false;
+            }
+
+            if (std::isnan(cosV)) {
+                if (!cosineNanLogged) {
+                    logMessage("warning", "Cosine block output: NaN detected", "cosine");
+                    cosineNanLogged = true;
+                }
+            } else {
+                cosineNanLogged = false;
+            }
 
             // Push sample to the callback (which sends it over TCP)
             cb(t, sinV, cosV);
@@ -187,10 +208,10 @@ void SimulationEngine::start(SampleCallback cb) {
 
         if (csvFile.is_open()) {
             csvFile.close();
-            std::cout << "[C++] Saved all run samples to simulation_run.csv\n";
+            logMessage("info", "Saved all run samples to simulation_run.csv");
         }
 
-        std::cout << "[C++] Simulation stopped.\n";
+        logMessage("info", "Simulation stopped.");
     });
 }
 

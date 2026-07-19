@@ -1,0 +1,50 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Backend Engine",
+      "type": "shell",
+      "command": "g++ -std=c++17 -O2 backend/src/*.cpp -lws2_32 -o backend/build/wavebench_engine.exe",
+      "windows": {
+        "command": "powershell -Command \"mkdir -Force backend/build; g++ -std=c++17 -O2 backend/src/*.cpp -lws2_32 -o backend/build/wavebench_engine.exe\""
+      },
+      "osx": {
+        "command": "mkdir -p backend/build && g++ -std=c++17 -O2 backend/src/*.cpp -o backend/build/wavebench_engine"
+      },
+      "linux": {
+        "command": "mkdir -p backend/build && g++ -std=c++17 -O2 backend/src/*.cpp -o backend/build/wavebench_engine"
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Run Java Gateway",
+      "type": "shell",
+      "command": "mvn -f gateway/pom.xml exec:java",
+      "dependsOn": "Build Backend Engine",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Run React Frontend",
+      "type": "shell",
+      "command": "npm --prefix frontend install && npm --prefix frontend run dev",
+      "windows": {
+        "command": "powershell -Command \"cd frontend; npm install; npm run dev\""
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Run WaveBench Studio",
+      "dependsOn": [
+        "Run Java Gateway",
+        "Run React Frontend"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

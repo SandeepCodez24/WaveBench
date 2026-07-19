@@ -3,7 +3,6 @@ package com.wavebench.gateway.auth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -13,7 +12,9 @@ import java.util.UUID;
 /**
  * UserStore — flat-file user persistence using a JSON array in users.json.
  *
- * <p>Format of users.json:
+ * <p>
+ * Format of users.json:
+ * 
  * <pre>
  * [
  *   {"id":"uuid","email":"a@b.com","passwordHash":"$2a$...","displayName":"Alice",
@@ -21,7 +22,8 @@ import java.util.UUID;
  * ]
  * </pre>
  *
- * <p>Thread-safety: all public methods are synchronized on the file lock.
+ * <p>
+ * Thread-safety: all public methods are synchronized on the file lock.
  * Suitable for a single-node dev/demo setup. Upgrade path: swap this class
  * for a Spring Data JPA repository without touching any call sites.
  */
@@ -35,12 +37,17 @@ public class UserStore {
     // Read helpers
     // -------------------------------------------------------------------------
 
-    /** Returns the entire users array, creating an empty one if the file is absent. */
+    /**
+     * Returns the entire users array, creating an empty one if the file is absent.
+     */
     private static ArrayNode readAll() {
         File file = new File(USERS_FILE);
-        if (!file.exists()) return MAPPER.createArrayNode();
+        if (!file.exists())
+            return MAPPER.createArrayNode();
         try {
-            return (ArrayNode) MAPPER.readTree(file);
+            byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+            String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            return (ArrayNode) MAPPER.readTree(content);
         } catch (IOException e) {
             System.err.println("[UserStore] Failed to read users.json: " + e.getMessage());
             return MAPPER.createArrayNode();
@@ -49,8 +56,9 @@ public class UserStore {
 
     /** Persists the given array back to users.json. */
     private static void writeAll(ArrayNode users) throws IOException {
-        try (FileWriter fw = new FileWriter(USERS_FILE)) {
-            fw.write(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(users));
+        try (java.io.BufferedWriter writer = java.nio.file.Files.newBufferedWriter(java.nio.file.Paths.get(USERS_FILE),
+                java.nio.charset.StandardCharsets.UTF_8)) {
+            writer.write(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(users));
         }
     }
 
@@ -62,7 +70,8 @@ public class UserStore {
     public static boolean existsByEmail(String email) {
         synchronized (FILE_LOCK) {
             for (var node : readAll()) {
-                if (email.equalsIgnoreCase(node.path("email").asText())) return true;
+                if (email.equalsIgnoreCase(node.path("email").asText()))
+                    return true;
             }
             return false;
         }
@@ -79,8 +88,8 @@ public class UserStore {
      * @return the newly created user as an ObjectNode (includes generated id)
      */
     public static ObjectNode createUser(String email, String passwordHash,
-                                        String displayName, String organization,
-                                        String role) throws IOException {
+            String displayName, String organization,
+            String role) throws IOException {
         synchronized (FILE_LOCK) {
             ArrayNode users = readAll();
 
@@ -136,12 +145,12 @@ public class UserStore {
      */
     public static ObjectNode toPublicProfile(ObjectNode user) {
         ObjectNode pub = MAPPER.createObjectNode();
-        pub.put("id",           user.path("id").asText());
-        pub.put("email",        user.path("email").asText());
-        pub.put("displayName",  user.path("displayName").asText());
+        pub.put("id", user.path("id").asText());
+        pub.put("email", user.path("email").asText());
+        pub.put("displayName", user.path("displayName").asText());
         pub.put("organization", user.path("organization").asText());
-        pub.put("role",         user.path("role").asText());
-        pub.put("createdAt",    user.path("createdAt").asText());
+        pub.put("role", user.path("role").asText());
+        pub.put("createdAt", user.path("createdAt").asText());
         return pub;
     }
 }

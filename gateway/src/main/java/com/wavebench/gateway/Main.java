@@ -1,23 +1,7 @@
 package com.wavebench.gateway;
 
-/**
- * Main — Entry point for the WaveBench Studio Java Gateway.
- *
- * <p>Startup sequence:
- * <ol>
- *   <li>Start the REST HTTP API server on port 8081 (auth, projects, exports)</li>
- *   <li>Create a {@link GatewayServer} (WebSocket on port 8080) — not started yet</li>
- *   <li>Connect {@link EngineClient} to the C++ engine (TCP localhost:5050),
- *       wiring the sample callback to {@code server.broadcastSample()} directly</li>
- *   <li>Start the WebSocket server so browsers can connect</li>
- *   <li>Register a JVM shutdown hook for graceful teardown</li>
- * </ol>
- *
- * <p>Run with:
- * <pre>
- *   mvn -f gateway/pom.xml exec:java
- * </pre>
- */
+import java.io.*;
+
 public class Main {
 
     /** WebSocket port that browsers connect to */
@@ -38,6 +22,30 @@ public class Main {
         System.out.println("============================================");
 
         // ------------------------------------------------------------------
+        // 0. Spawn C++ Simulation Engine subprocess
+        // ------------------------------------------------------------------
+        Process cppProcess = null;
+        try {
+            String os = System.getProperty("os.name").toLowerCase();
+            String exePath = os.contains("win") ? "build\\wavebench_engine.exe" : "./build/wavebench_engine";
+            File exeFile = new File("backend", os.contains("win") ? "build\\wavebench_engine.exe" : "build/wavebench_engine");
+            
+            if (!exeFile.exists()) {
+                System.err.println("[Gateway] ERROR: C++ Engine executable not found at: " + exeFile.getAbsolutePath());
+            } else {
+                System.out.println("[Gateway] Starting C++ Engine subprocess at: " + exeFile.getAbsolutePath());
+                ProcessBuilder pb = new ProcessBuilder(exePath);
+                pb.directory(new File("backend"));
+                cppProcess = pb.start();
+                System.out.println("[Gateway] C++ Engine subprocess spawned successfully.");
+            }
+        } catch (Exception e) {
+            System.err.println("[Gateway] Failed to start C++ subprocess: " + e.getMessage());
+        }
+
+        final Process finalCppProcess = cppProcess;
+
+        // ------------------------------------------------------------------
         // 1. Start the REST API server (auth, projects, exports)
         // ------------------------------------------------------------------
         HttpApiServer httpApi = new HttpApiServer();
@@ -50,6 +58,24 @@ public class Main {
         EngineClient engine = new EngineClient();
 
         GatewayServer server = new GatewayServer(WS_PORT, engine);
+
+        // ------------------------------------------------------------------
+        // 2.5 Start C++ standard error tailing thread
+        // ------------------------------------------------------------------
+        if (finalCppProcess != null) {
+            Thread stderrThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(finalCppProcess.getErrorStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        server.broadcastLog(line);
+                    }
+                } catch (IOException e) {
+                    System.err.println("[Gateway] Error reading C++ stderr: " + e.getMessage());
+                }
+            }, "cpp-stderr-reader");
+            stderrThread.setDaemon(true);
+            stderrThread.start();
+        }
 
         // ------------------------------------------------------------------
         // 3. Connect to the C++ engine.
@@ -86,6 +112,10 @@ public class Main {
             }
             engine.disconnect();
             httpApi.stop(2);
+            if (finalCppProcess != null) {
+                System.out.println("[Gateway] Stopping C++ engine subprocess...");
+                finalCppProcess.destroy();
+            }
             System.out.println("[Gateway] Shutdown complete.");
         }, "shutdown-hook"));
 

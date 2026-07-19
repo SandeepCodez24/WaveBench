@@ -164,7 +164,6 @@ public class AuthHandler implements HttpHandler {
     // Helpers
     // -------------------------------------------------------------------------
 
-    @SuppressWarnings("unchecked")
     private Map<?, ?> parseBody(HttpExchange exchange) {
         try (InputStream is = exchange.getRequestBody()) {
             String raw = new String(is.readAllBytes(), StandardCharsets.UTF_8);

@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { 
-  ReactFlow, 
-  Background, 
-  Controls, 
+import {
+  ReactFlow,
+  Background,
+  BackgroundVariant,
+  Controls,
   MiniMap,
   ReactFlowProvider,
   useReactFlow,
@@ -29,18 +30,28 @@ import { ModelBrowser } from './components/ModelBrowser';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { StatusBar } from './components/StatusBar';
 import { StepSizeDialog } from './components/StepSizeDialog';
-import { DiagnosticsModal } from './components/DiagnosticsModal';
+import { LogsTerminalPanel } from './components/LogsTerminalPanel';
 import { FFTModal } from './components/FFTModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { GuidedTour } from './components/GuidedTour';
 import { PerfHUD } from './components/PerfHUD';
 import { SaveProjectDialog } from './components/SaveProjectDialog';
+import { CommandPalette } from './components/CommandPalette';
+import { useLogStream } from './hooks/useLogStream';
 
 // Import custom simulation nodes
 import { ClockNode } from './nodes/ClockNode';
 import { SineNode } from './nodes/SineNode';
 import { CosineNode } from './nodes/CosineNode';
 import { ScopeNode } from './nodes/ScopeNode';
+// New block nodes
+import { GainNode } from './nodes/GainNode';
+import { ConstantNode } from './nodes/ConstantNode';
+import { SumNode } from './nodes/SumNode';
+import { ProbeNode } from './nodes/ProbeNode';
+import { MuxNode } from './nodes/MuxNode';
+import { ComparatorNode } from './nodes/ComparatorNode';
+import { SwitchNode } from './nodes/SwitchNode';
 
 // Import WebSocket communications hook
 import { useSimulationSocket } from './hooks/useSimulationSocket';
@@ -53,6 +64,16 @@ const nodeTypes = {
   sine: SineNode,
   cosine: CosineNode,
   scope: ScopeNode,
+  // Blocks — Sources/Math
+  gain: GainNode,
+  constant: ConstantNode,
+  sum: SumNode,
+  // Signals
+  probe: ProbeNode,
+  mux: MuxNode,
+  // Logic
+  comparator: ComparatorNode,
+  switch: SwitchNode,
 };
 
 // Initial nodes layout (Simulink diagram representation)
@@ -71,22 +92,24 @@ const initialEdges: Edge[] = [
   { id: 'e4', source: 'cosine', sourceHandle: 'out', target: 'scope', targetHandle: 'in', animated: true },
 ];
 
-function FlowWorkspace({ 
+function FlowWorkspace({
   onGoToDashboard,
   activeProjectName,
   setActiveProjectName
-}: { 
+}: {
   onGoToDashboard: () => void;
   activeProjectName: string | null;
   setActiveProjectName: (name: string | null) => void;
 }) {
   const { user, logout } = useAuth();
   const { samplesRef, send, connectionState, clearSamples } = useSimulationSocket();
+  const logStream = useLogStream();
   const [showStepDialog, setShowStepDialog] = useState<boolean>(false);
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
-  const [isModelBrowserOpen, setIsModelBrowserOpen] = useState<boolean>(false);
+  const [isSaveAsMode, setIsSaveAsMode] = useState<boolean>(false);
+  const [activePanelCategory, setActivePanelCategory] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  
+
   const [stepSize, setStepSize] = useState<number>(0.001);
   const [solver, setSolver] = useState<'Euler' | 'RK4'>('RK4');
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -96,7 +119,8 @@ function FlowWorkspace({
   const [isLogging, setIsLogging] = useState<boolean>(true);
 
   // --- View menu state ---
-  const [showGrid, setShowGrid] = useState<boolean>(true);
+  // 'off' | 'lines' | 'dots'  — cycles through on each toggle
+  const [showGrid, setShowGrid] = useState<'off' | 'lines' | 'dots'>('dots');
   const [isDarkTheme, setIsDarkTheme] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
 
@@ -108,9 +132,43 @@ function FlowWorkspace({
   // --- Help menu state ---
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState<boolean>(false);
   const [showGuidedTour, setShowGuidedTour] = useState<boolean>(false);
-  
+
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // --- Spec-driven Pointer and Command states ---
+  const [spacePressed, setSpacePressed] = useState<boolean>(false);
+  const [quickAddMenu, setQuickAddMenu] = useState<{ x: number; y: number; flowX: number; flowY: number } | null>(null);
+  const [hoveredEdgeInfo, setHoveredEdgeInfo] = useState<{ edgeId: string; x: number; y: number } | null>(null);
+  const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
+
+  // Space-bar Pan Mode key down/up listeners
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ' ' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        setSpacePressed(true);
+      }
+      // Ctrl+K toggles Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        setSpacePressed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+
 
   // --- Edit Menu: Undo/Redo & Clipboard state ---
   const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
@@ -155,7 +213,7 @@ function FlowWorkspace({
             if (loadedData.edges) setEdges(loadedData.edges);
             if (loadedData.stepSize) setStepSize(loadedData.stepSize);
             if (loadedData.solver) setSolver(loadedData.solver);
-            
+
             // Sync loaded parameters with C++ engine
             send({
               type: 'config',
@@ -186,16 +244,16 @@ function FlowWorkspace({
     setHistory((prevHistory) => {
       // If index is not at the end of the history array (e.g. after undoing), discard subsequent entries
       const nextHistory = prevHistory.slice(0, historyIndex + 1);
-      
+
       // Prevent duplicate pushes if the states are identical
       if (nextHistory.length > 0) {
         const last = nextHistory[nextHistory.length - 1];
-        if (JSON.stringify(last.nodes) === JSON.stringify(cleanNodes) && 
-            JSON.stringify(last.edges) === JSON.stringify(cleanEdges)) {
+        if (JSON.stringify(last.nodes) === JSON.stringify(cleanNodes) &&
+          JSON.stringify(last.edges) === JSON.stringify(cleanEdges)) {
           return prevHistory;
         }
       }
-      
+
       const updated = [...nextHistory, { nodes: cleanNodes, edges: cleanEdges }];
       setHistoryIndex(updated.length - 1);
       return updated;
@@ -221,28 +279,52 @@ function FlowWorkspace({
       setHistoryIndex(nextIndex);
     }
   }, [history, historyIndex, setNodes, setEdges]);
-  
+
   const [serverProjects, setServerProjects] = useState<string[]>([]);
   const [showServerProjectsModal, setShowServerProjectsModal] = useState<boolean>(false);
 
   const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
 
-  // Wire samplesRef into the Scope node's data
+  // Ensure each Scope node has its own unique samplesRef and sequential label
   const updatedNodes = useMemo(() => {
+    const seenRefs = new Set();
+    let scopeCount = 0;
     return nodes.map((node) => {
       if (node.type === 'scope') {
-        return {
-          ...node,
-          data: {
+        scopeCount++;
+        const indexStr = String(scopeCount).padStart(2, '0');
+        const expectedLabel = `SCOPE_VIEW_${indexStr}`;
+
+        if (!node.data) {
+          node.data = {};
+        }
+        let localRef = (node.data as any).samplesRef;
+        if (!localRef || !Array.isArray(localRef.current) || seenRefs.has(localRef)) {
+          localRef = { current: [] };
+          node.data = {
             ...node.data,
-            samplesRef,
-          },
-        };
+            samplesRef: localRef,
+            label: expectedLabel,
+          } as any;
+        } else if ((node.data as any).label !== expectedLabel) {
+          node.data = {
+            ...node.data,
+            label: expectedLabel,
+          } as any;
+        }
+        seenRefs.add(localRef);
       }
       return node;
     });
-  }, [nodes, samplesRef]);
-
+  }, [nodes]);
+  // Log gateway connection changes
+  useEffect(() => {
+    logStream.appendLog({
+      level: 'info',
+      src: 'frontend',
+      msg: `Gateway connection state changed to: ${connectionState}`
+    });
+  }, [connectionState, logStream.appendLog]);
   // Handle settings config apply
   const handleApplySettings = useCallback((newStepSize: number, newSolver: 'Euler' | 'RK4') => {
     setStepSize(newStepSize);
@@ -281,7 +363,7 @@ function FlowWorkspace({
         x: event.clientX,
         y: event.clientY,
       });
-      
+
       const defaultData = type === 'scope' ? { samplesRef: { current: [] } } : {};
 
       const newNode = {
@@ -329,7 +411,7 @@ function FlowWorkspace({
           if (['sine', 'cosine'].includes(node.type || '')) {
             const amplitude = updatedNode.data.amplitude ?? 1.0;
             const frequency = updatedNode.data.frequency ?? 1.0;
-            
+
             send({
               type: 'setBlockParam',
               blockId: node.type,
@@ -337,7 +419,7 @@ function FlowWorkspace({
               frequency
             });
           }
-          
+
           return updatedNode;
         }
         return node;
@@ -351,7 +433,7 @@ function FlowWorkspace({
   const handleDeleteSelected = useCallback(() => {
     const selectedNodes = nodes.filter(n => n.selected);
     const selectedEdges = edges.filter(e => e.selected);
-    
+
     if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
 
     const newNodes = nodes.filter(n => !n.selected);
@@ -373,7 +455,7 @@ function FlowWorkspace({
     if (selectedNodes.length === 0) return;
 
     const selectedNodeIds = new Set(selectedNodes.map(n => n.id));
-    const connectedEdges = edges.filter(e => 
+    const connectedEdges = edges.filter(e =>
       e.selected || (selectedNodeIds.has(e.source) && selectedNodeIds.has(e.target))
     );
 
@@ -436,7 +518,7 @@ function FlowWorkspace({
     if (selectedNodes.length === 0) return;
 
     const selectedNodeIds = new Set(selectedNodes.map(n => n.id));
-    const connectedEdges = edges.filter(e => 
+    const connectedEdges = edges.filter(e =>
       e.selected || (selectedNodeIds.has(e.source) && selectedNodeIds.has(e.target))
     );
 
@@ -486,7 +568,7 @@ function FlowWorkspace({
 
   const onNodesDelete = useCallback((deletedNodes: Node[]) => {
     const remainingNodes = nodes.filter(n => !deletedNodes.some(dn => dn.id === n.id));
-    const remainingEdges = edges.filter(e => 
+    const remainingEdges = edges.filter(e =>
       !deletedNodes.some(dn => dn.id === e.source || dn.id === e.target)
     );
     pushToHistory(remainingNodes, remainingEdges);
@@ -497,12 +579,226 @@ function FlowWorkspace({
     pushToHistory(nodes, remainingEdges);
   }, [nodes, edges, pushToHistory]);
 
+
+
+  // Client-side recursive signal-flow evaluation engine
+  const getNodeOutput = useCallback((nodeId: string, t: number, currentNodes: Node[], currentEdges: Edge[]): number => {
+    const node = currentNodes.find(n => n.id === nodeId);
+    if (!node) return 0.0;
+
+    if (node.type === 'clock') {
+      return t;
+    }
+
+    if (['sine', 'cosine'].includes(node.type || '')) {
+      const edge = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'in');
+      if (!edge) return 0.0;
+
+      const inputVal = getNodeOutput(edge.source, t, currentNodes, currentEdges);
+      const amp = (node.data as any).amplitude ?? 1.0;
+      const freq = (node.data as any).frequency ?? 1.0;
+
+      if (node.type === 'sine') {
+        return amp * Math.sin(freq * inputVal);
+      } else {
+        return amp * Math.cos(freq * inputVal);
+      }
+    }
+
+    // Gain — multiplies its upstream signal by K
+    if (node.type === 'gain') {
+      const edge = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'in');
+      if (!edge) return 0.0;
+      const k = (node.data as any).gain ?? 2.0;
+      return k * getNodeOutput(edge.source, t, currentNodes, currentEdges);
+    }
+
+    // Constant — always emits a fixed scalar
+    if (node.type === 'constant') {
+      return (node.data as any).value ?? 1.0;
+    }
+
+    // Sum — adds two upstream signals
+    if (node.type === 'sum') {
+      const in1 = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'in1');
+      const in2 = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'in2');
+      const v1 = in1 ? getNodeOutput(in1.source, t, currentNodes, currentEdges) : 0;
+      const v2 = in2 ? getNodeOutput(in2.source, t, currentNodes, currentEdges) : 0;
+      return v1 + v2;
+    }
+
+    // Comparator — outputs 1 if condition met, else 0
+    if (node.type === 'comparator') {
+      const edge = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'in');
+      if (!edge) return 0.0;
+      const val = getNodeOutput(edge.source, t, currentNodes, currentEdges);
+      const op = (node.data as any).operator ?? '>';
+      const thr = (node.data as any).threshold ?? 0.5;
+      if (op === '>') return val > thr ? 1 : 0;
+      if (op === '<') return val < thr ? 1 : 0;
+      if (op === '==') return Math.abs(val - thr) < 0.01 ? 1 : 0;
+      return 0;
+    }
+
+    // Switch — passes A when control > 0.5, else B
+    if (node.type === 'switch') {
+      const edgeA = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'inA');
+      const edgeCtrl = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'ctrl');
+      const edgeB = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'inB');
+      const ctrl = edgeCtrl ? getNodeOutput(edgeCtrl.source, t, currentNodes, currentEdges) : 0;
+      if (ctrl > 0.5) {
+        return edgeA ? getNodeOutput(edgeA.source, t, currentNodes, currentEdges) : 0;
+      } else {
+        return edgeB ? getNodeOutput(edgeB.source, t, currentNodes, currentEdges) : 0;
+      }
+    }
+
+    return 0.0;
+  }, []);
+
+  // Intercept socket ticks and solve the active canvas graph layout in real-time
+  useEffect(() => {
+    const handleSampleTick = (e: Event) => {
+      const msg = (e as CustomEvent).detail;
+      if (!msg || typeof msg.t !== 'number') return;
+
+      const scopeNodes = nodes.filter(n => n.type === 'scope');
+
+      // Update each individual scope node's local samples buffer
+      scopeNodes.forEach((scopeNode) => {
+        const localRef = (scopeNode.data as any)?.samplesRef;
+        if (!localRef) return;
+
+        const scopeEdges = edges.filter(ed => ed.target === scopeNode.id);
+        let ch1Val = 0.0;
+        let ch2Val = 0.0;
+
+        if (scopeEdges.length > 0) {
+          ch1Val = getNodeOutput(scopeEdges[0].source, msg.t, nodes, edges);
+        }
+        if (scopeEdges.length > 1) {
+          ch2Val = getNodeOutput(scopeEdges[1].source, msg.t, nodes, edges);
+        }
+
+        const samples = localRef.current;
+        if (!Array.isArray(samples)) return;
+
+        const lastSample = samples[samples.length - 1];
+        if (lastSample && lastSample.t === msg.t) {
+          lastSample.sin = ch1Val;
+          lastSample.cos = ch2Val;
+        } else {
+          if (samples.length >= 500) {
+            samples.shift();
+          }
+          samples.push({
+            type: 'sample',
+            t: msg.t,
+            sin: ch1Val,
+            cos: ch2Val
+          });
+        }
+      });
+
+      // Keep the global samplesRef in sync for backward compatibility (e.g. PerfHUD, CSV download, etc.)
+      const firstScope = scopeNodes[0];
+      let firstCh1 = 0.0;
+      let firstCh2 = 0.0;
+      if (firstScope) {
+        const scopeEdges = edges.filter(ed => ed.target === firstScope.id);
+        if (scopeEdges.length > 0) {
+          firstCh1 = getNodeOutput(scopeEdges[0].source, msg.t, nodes, edges);
+        }
+        if (scopeEdges.length > 1) {
+          firstCh2 = getNodeOutput(scopeEdges[1].source, msg.t, nodes, edges);
+        }
+      }
+
+      const globalSamples = samplesRef.current;
+      if (globalSamples.length > 0) {
+        const lastSample = globalSamples[globalSamples.length - 1];
+        if (lastSample && lastSample.t === msg.t) {
+          lastSample.sin = firstCh1;
+          lastSample.cos = firstCh2;
+        }
+      }
+    };
+
+    window.addEventListener('simulation-sample', handleSampleTick);
+    return () => window.removeEventListener('simulation-sample', handleSampleTick);
+  }, [nodes, edges, getNodeOutput, samplesRef]);
+
+  // Minimap visibility state
+  const [showMiniMap, setShowMiniMap] = useState<boolean>(true);
+
+  // --- FILE MENU OPERATIONS ---
+
+  // 1. New Project
+  const handleNewProject = useCallback(() => {
+    if (isPlaying) {
+      handleStop();
+    }
+    clearSamples();
+    nodes.forEach(n => {
+      if (n.type === 'scope' && (n.data as any)?.samplesRef) {
+        (n.data as any).samplesRef.current = [];
+      }
+    });
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+    setStepSize(0.001);
+    setSolver('RK4');
+    setSelectedNodeId(null);
+    setActiveProjectName(null);
+  }, [isPlaying, handleStop, clearSamples, setNodes, setEdges, setActiveProjectName, nodes]);
+
+  // 2. Save Project (Local or Server)
+  const handleSaveProject = useCallback((isSaveAs: boolean) => {
+    if (isSaveAs || !activeProjectName) {
+      setIsSaveAsMode(isSaveAs);
+      setShowSaveDialog(true);
+      return;
+    }
+
+    const projectData = {
+      nodes: nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: n.data })),
+      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle })),
+      stepSize,
+      solver
+    };
+
+    // Auto-generate high-quality technical description
+    const description = `${nodes.length} blocks, ${edges.length} connections · ${solver} (${stepSize}s)`;
+
+    apiSaveProject(activeProjectName, projectData, description)
+      .then(() => {
+        alert(`Project "${activeProjectName}" saved successfully.`);
+      })
+      .catch((err: Error) => alert(`Save failed: ${err.message}`));
+  }, [nodes, edges, stepSize, solver, activeProjectName]);
+
+  // Callback to handle modal save submission
+  const handleSaveWithNewName = useCallback(async (name: string) => {
+    const projectData = {
+      nodes: nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: n.data })),
+      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle })),
+      stepSize,
+      solver
+    };
+    const description = `${nodes.length} blocks, ${edges.length} connections · ${solver} (${stepSize}s)`;
+
+    await apiSaveProject(name, projectData, description);
+    // Mark as already loaded to prevent redundant network fetch and potential reload loop
+    loadedProjectRef.current = name;
+    setActiveProjectName(name);
+  }, [nodes, edges, stepSize, solver, setActiveProjectName]);
+
   // Keyboard shortcut listener hook
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
-        document.activeElement?.tagName === 'INPUT' || 
-        document.activeElement?.tagName === 'TEXTAREA' || 
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
         document.activeElement?.hasAttribute('contenteditable')
       ) {
         return;
@@ -543,7 +839,8 @@ function FlowWorkspace({
           e.preventDefault(); setShowMiniMap(prev => !prev);
           break;
         case 'g':
-          e.preventDefault(); setShowGrid(prev => !prev);
+          e.preventDefault();
+          setShowGrid(prev => prev === 'off' ? 'lines' : prev === 'lines' ? 'dots' : 'off');
           break;
         case 'b':
           e.preventDefault(); setIsSidebarOpen(prev => !prev);
@@ -562,6 +859,14 @@ function FlowWorkspace({
         case '-':
           e.preventDefault(); zoomOut();
           break;
+        case 's':
+          e.preventDefault();
+          if (e.shiftKey) {
+            handleSaveProject(true);
+          } else {
+            handleSaveProject(false);
+          }
+          break;
         default:
           break;
       }
@@ -570,159 +875,7 @@ function FlowWorkspace({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDuplicate,
-      isPlaying, handleStart, handleStop, fitView, zoomIn, zoomOut]);
-
-  // Client-side recursive signal-flow evaluation engine
-  const getNodeOutput = useCallback((nodeId: string, t: number, currentNodes: Node[], currentEdges: Edge[]): number => {
-    const node = currentNodes.find(n => n.id === nodeId);
-    if (!node) return 0.0;
-
-    if (node.type === 'clock') {
-      return t;
-    }
-
-    if (['sine', 'cosine'].includes(node.type || '')) {
-      const edge = currentEdges.find(e => e.target === nodeId && e.targetHandle === 'in');
-      if (!edge) return 0.0;
-
-      const inputVal = getNodeOutput(edge.source, t, currentNodes, currentEdges);
-      const amp = (node.data as any).amplitude ?? 1.0;
-      const freq = (node.data as any).frequency ?? 1.0;
-
-      if (node.type === 'sine') {
-        return amp * Math.sin(freq * inputVal);
-      } else {
-        return amp * Math.cos(freq * inputVal);
-      }
-    }
-
-    return 0.0;
-  }, []);
-
-  // Intercept socket ticks and solve the active canvas graph layout in real-time
-  useEffect(() => {
-    const handleSampleTick = (e: Event) => {
-      const msg = (e as CustomEvent).detail;
-      if (!msg || typeof msg.t !== 'number') return;
-
-      const scopeNode = nodes.find(n => n.type === 'scope');
-      if (!scopeNode) return;
-
-      const scopeEdges = edges.filter(ed => ed.target === scopeNode.id);
-      
-      let ch1Val = 0.0;
-      let ch2Val = 0.0;
-
-      if (scopeEdges.length > 0) {
-        ch1Val = getNodeOutput(scopeEdges[0].source, msg.t, nodes, edges);
-      }
-      if (scopeEdges.length > 1) {
-        ch2Val = getNodeOutput(scopeEdges[1].source, msg.t, nodes, edges);
-      }
-
-      const samples = samplesRef.current;
-      if (samples.length > 0) {
-        const lastSample = samples[samples.length - 1];
-        if (lastSample && lastSample.t === msg.t) {
-          lastSample.sin = ch1Val;
-          lastSample.cos = ch2Val;
-        }
-      }
-    };
-
-    window.addEventListener('simulation-sample', handleSampleTick);
-    return () => window.removeEventListener('simulation-sample', handleSampleTick);
-  }, [nodes, edges, getNodeOutput, samplesRef]);
-
-  // Minimap draggable HUD widget state
-  const [showMiniMap, setShowMiniMap] = useState<boolean>(true);
-  const [minimapPos, setMinimapPos] = useState({ x: 24, y: 24 });
-  const isDraggingMinimap = useRef(false);
-  const minimapDragStart = useRef({ x: 0, y: 0 });
-  const minimapPositionStart = useRef({ x: 24, y: 24 });
-
-  const handleMinimapDragStart = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    isDraggingMinimap.current = true;
-    minimapDragStart.current = { x: e.clientX, y: e.clientY };
-    minimapPositionStart.current = { ...minimapPos };
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!isDraggingMinimap.current) return;
-      const dx = moveEvent.clientX - minimapDragStart.current.x;
-      const dy = minimapDragStart.current.y - moveEvent.clientY;
-      
-      setMinimapPos({
-        x: Math.max(10, minimapPositionStart.current.x + dx),
-        y: Math.max(10, minimapPositionStart.current.y + dy),
-      });
-    };
-
-    const handleMouseUp = () => {
-      isDraggingMinimap.current = false;
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [minimapPos]);
-
-  // --- FILE MENU OPERATIONS ---
-
-  // 1. New Project
-  const handleNewProject = useCallback(() => {
-    if (isPlaying) {
-      handleStop();
-    }
-    clearSamples();
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-    setStepSize(0.001);
-    setSolver('RK4');
-    setSelectedNodeId(null);
-    setActiveProjectName(null);
-  }, [isPlaying, handleStop, clearSamples, setNodes, setEdges, setActiveProjectName]);
-
-  // 2. Save Project (Local or Server)
-  const handleSaveProject = useCallback((isSaveAs: boolean) => {
-    if (isSaveAs || !activeProjectName) {
-      setShowSaveDialog(true);
-      return;
-    }
-
-    const projectData = {
-      nodes: nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: n.data })),
-      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle })),
-      stepSize,
-      solver
-    };
-
-    // Auto-generate high-quality technical description
-    const description = `${nodes.length} blocks, ${edges.length} connections · ${solver} (${stepSize}s)`;
-
-    apiSaveProject(activeProjectName, projectData, description)
-      .then(() => {
-        alert(`Project "${activeProjectName}" saved successfully.`);
-      })
-      .catch((err: Error) => alert(`Save failed: ${err.message}`));
-  }, [nodes, edges, stepSize, solver, activeProjectName]);
-
-  // Callback to handle modal save submission
-  const handleSaveWithNewName = useCallback(async (name: string) => {
-    const projectData = {
-      nodes: nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: n.data })),
-      edges: edges.map(e => ({ id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle })),
-      stepSize,
-      solver
-    };
-    const description = `${nodes.length} blocks, ${edges.length} connections · ${solver} (${stepSize}s)`;
-
-    await apiSaveProject(name, projectData, description);
-    // Mark as already loaded to prevent redundant network fetch and potential reload loop
-    loadedProjectRef.current = name;
-    setActiveProjectName(name);
-  }, [nodes, edges, stepSize, solver, setActiveProjectName]);
+    isPlaying, handleStart, handleStop, fitView, zoomIn, zoomOut, handleSaveProject]);
 
   // 3. Open Local Project
   const handleOpenLocalProject = useCallback(() => {
@@ -748,7 +901,7 @@ function FlowWorkspace({
             setEdges(loadedData.edges);
             if (loadedData.stepSize) setStepSize(loadedData.stepSize);
             if (loadedData.solver) setSolver(loadedData.solver);
-            
+
             // Sync settings to gateway/backend
             send({
               type: 'config',
@@ -795,14 +948,14 @@ function FlowWorkspace({
           if (loadedData.edges) setEdges(loadedData.edges);
           if (loadedData.stepSize) setStepSize(loadedData.stepSize);
           if (loadedData.solver) setSolver(loadedData.solver);
-          
+
           // Sync loaded parameters with engine
           send({
             type: 'config',
             stepSize: loadedData.stepSize || stepSize,
             solver: loadedData.solver || solver
           });
-          
+
           setActiveProjectName(name);
           setShowServerProjectsModal(false);
           alert(`Project "${name}" loaded successfully!`);
@@ -816,13 +969,25 @@ function FlowWorkspace({
 
   // 5. Export CSV
   const handleExportCSV = useCallback(() => {
-    const samples = samplesRef.current;
-    if (samples.length === 0) {
+    let targetSamples = samplesRef.current;
+    if (selectedNodeId) {
+      const selectedNode = nodes.find(n => n.id === selectedNodeId);
+      if (selectedNode && selectedNode.type === 'scope' && (selectedNode.data as any)?.samplesRef) {
+        targetSamples = (selectedNode.data as any).samplesRef.current;
+      }
+    } else {
+      const firstScope = nodes.find(n => n.type === 'scope');
+      if (firstScope && (firstScope.data as any)?.samplesRef) {
+        targetSamples = (firstScope.data as any).samplesRef.current;
+      }
+    }
+
+    if (!targetSamples || targetSamples.length === 0) {
       alert('No simulation sample data available to export.');
       return;
     }
     let csv = 't,sin,cos\n';
-    samples.forEach(s => {
+    targetSamples.forEach(s => {
       csv += `${s.t.toFixed(6)},${s.sin.toFixed(6)},${s.cos.toFixed(6)}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -832,11 +997,18 @@ function FlowWorkspace({
     link.download = `wavebench-scope-data-${Date.now()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [samplesRef]);
+    logStream.appendLog({ level: 'info', src: 'frontend', msg: 'Exported scope data to CSV' });
+  }, [samplesRef, selectedNodeId, nodes, logStream.appendLog]);
 
   // 6. Export PNG
   const handleExportPNG = useCallback(() => {
-    const canvas = document.querySelector('canvas');
+    let canvas: HTMLCanvasElement | null = null;
+    if (selectedNodeId) {
+      canvas = document.querySelector(`[data-id="${selectedNodeId}"] canvas`);
+    }
+    if (!canvas) {
+      canvas = document.querySelector('canvas');
+    }
     if (!canvas) {
       alert('Scope canvas element not found.');
       return;
@@ -846,16 +1018,33 @@ function FlowWorkspace({
     link.href = dataUrl;
     link.download = `wavebench-scope-capture-${Date.now()}.png`;
     link.click();
-  }, []);
+    logStream.appendLog({ level: 'info', src: 'frontend', msg: 'Exported scope image to PNG' });
+  }, [selectedNodeId, logStream.appendLog]);
 
   // 7. Export Simulation Report
   const handleExportReport = useCallback(() => {
-    const canvas = document.querySelector('canvas');
-    const scopeImgData = canvas ? canvas.toDataURL('image/png') : '';
+    let canvas: HTMLCanvasElement | null = null;
+    let targetSamples = samplesRef.current;
 
-    const samples = samplesRef.current;
-    // Take up to last 100 samples to keep the report lightweight but descriptive
-    const reportSamples = samples.slice(-100);
+    if (selectedNodeId) {
+      canvas = document.querySelector(`[data-id="${selectedNodeId}"] canvas`);
+      const selectedNode = nodes.find(n => n.id === selectedNodeId);
+      if (selectedNode && selectedNode.type === 'scope' && (selectedNode.data as any)?.samplesRef) {
+        targetSamples = (selectedNode.data as any).samplesRef.current;
+      }
+    }
+    if (!canvas) {
+      canvas = document.querySelector('canvas');
+    }
+    if (!targetSamples || targetSamples.length === 0) {
+      const firstScope = nodes.find(n => n.type === 'scope');
+      if (firstScope && (firstScope.data as any)?.samplesRef) {
+        targetSamples = (firstScope.data as any).samplesRef.current;
+      }
+    }
+
+    const scopeImgData = canvas ? canvas.toDataURL('image/png') : '';
+    const reportSamples = targetSamples.slice(-100);
     const tableRows = reportSamples.map(s => `
       <tr>
         <td style="font-family: 'JetBrains Mono', monospace; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; color: #1e293b;">${s.t.toFixed(4)}</td>
@@ -1029,7 +1218,7 @@ function FlowWorkspace({
       </div>
       <div class="meta-card">
         <div class="meta-label">Total Sample Size</div>
-        <div class="meta-value">${samples.length} pts</div>
+        <div class="meta-value">${targetSamples.length} pts</div>
       </div>
     </div>
 
@@ -1078,7 +1267,8 @@ function FlowWorkspace({
     link.download = `wavebench-simulation-report-${Date.now()}.html`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [solver, stepSize, samplesRef]);
+    logStream.appendLog({ level: 'info', src: 'frontend', msg: 'Exported simulation report' });
+  }, [solver, stepSize, samplesRef, selectedNodeId, nodes, logStream.appendLog]);
 
   // ─── NEW HANDLERS FOR SIMULATION / VIEW / TOOLS MENUS ───────────────────
 
@@ -1086,8 +1276,13 @@ function FlowWorkspace({
   const handleResetSimulation = useCallback(() => {
     if (isPlaying) handleStop();
     clearSamples();
+    nodes.forEach(n => {
+      if (n.type === 'scope' && (n.data as any)?.samplesRef) {
+        (n.data as any).samplesRef.current = [];
+      }
+    });
     send({ type: 'reset' });
-  }, [isPlaying, handleStop, clearSamples, send]);
+  }, [isPlaying, handleStop, clearSamples, send, nodes]);
 
   // Simulation speed (0 = MAX, 0.25, 1, 4)
   const handleSetSpeed = useCallback((multiplier: number) => {
@@ -1114,9 +1309,9 @@ function FlowWorkspace({
     });
   }, []);
 
-  // Grid visibility toggle
+  // Grid visibility toggle — cycles: off → lines → dots → off
   const handleToggleGrid = useCallback(() => {
-    setShowGrid(prev => !prev);
+    setShowGrid(prev => prev === 'off' ? 'lines' : prev === 'lines' ? 'dots' : 'off');
   }, []);
 
   // Sidebar collapsed/expanded
@@ -1149,14 +1344,14 @@ function FlowWorkspace({
             if (loadedData.edges) setEdges(loadedData.edges);
             if (loadedData.stepSize) setStepSize(loadedData.stepSize);
             if (loadedData.solver) setSolver(loadedData.solver);
-            
+
             // Sync loaded parameters with engine
             send({
               type: 'config',
               stepSize: loadedData.stepSize || stepSize,
               solver: loadedData.solver || solver
             });
-            
+
             alert(`Project "${msg.name}" loaded successfully from the server!`);
           }
         } catch (err) {
@@ -1174,6 +1369,147 @@ function FlowWorkspace({
     return () => window.removeEventListener('simulation-message', handleServerMessage);
   }, [setNodes, setEdges, isPlaying, handleStop, clearSamples, send, stepSize, solver]);
 
+  // --- Pointer Tool & Command Palette callback helpers ---
+  const getTargetHandle = useCallback((nodeType: string, targetNodeId: string, currentEdges: Edge[]) => {
+    if (['sum', 'mux'].includes(nodeType)) {
+      const hasIn1 = currentEdges.some(e => e.target === targetNodeId && e.targetHandle === 'in1');
+      return hasIn1 ? 'in2' : 'in1';
+    }
+    if (nodeType === 'switch') {
+      const hasInA = currentEdges.some(e => e.target === targetNodeId && e.targetHandle === 'inA');
+      if (!hasInA) return 'inA';
+      const hasInB = currentEdges.some(e => e.target === targetNodeId && e.targetHandle === 'inB');
+      if (!hasInB) return 'inB';
+      return 'ctrl';
+    }
+    return 'in';
+  }, []);
+
+  const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+    if (event.ctrlKey && selectedNodeId && selectedNodeId !== node.id) {
+      const targetHandle = getTargetHandle(node.type || '', node.id, edges);
+      const newEdge: Connection = {
+        source: selectedNodeId,
+        target: node.id,
+        sourceHandle: 'out',
+        targetHandle,
+      };
+      const exists = edges.some(e =>
+        e.source === newEdge.source &&
+        e.target === newEdge.target &&
+        e.sourceHandle === newEdge.sourceHandle &&
+        e.targetHandle === newEdge.targetHandle
+      );
+      if (!exists) {
+        setEdges((eds) => {
+          const next = addEdge(newEdge, eds);
+          pushToHistory(nodes, next);
+          return next;
+        });
+      }
+    }
+  }, [selectedNodeId, nodes, edges, setEdges, pushToHistory, getTargetHandle]);
+
+  const handlePaneClick = useCallback(() => {
+    setQuickAddMenu(null);
+  }, []);
+
+  const handlePaneDoubleClick = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    const target = event.target as HTMLElement;
+    if (target.closest('.react-flow__node') || target.closest('.react-flow__edge') || target.closest('.floating-zoom-bar') || target.closest('.floating-tools')) {
+      return;
+    }
+    const flowPos = screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    setQuickAddMenu({
+      x: event.clientX,
+      y: event.clientY,
+      flowX: flowPos.x,
+      flowY: flowPos.y,
+    });
+  }, [screenToFlowPosition]);
+
+  const handleEdgeMouseEnter = useCallback((event: React.MouseEvent, edge: Edge) => {
+    setHoveredEdgeInfo({
+      edgeId: edge.id,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }, []);
+
+  const handleEdgeMouseLeave = useCallback(() => {
+    setHoveredEdgeInfo(null);
+  }, []);
+
+  const getEdgeValueString = (edgeId: string) => {
+    const edge = edges.find(e => e.id === edgeId);
+    if (!edge) return '';
+    const srcNode = nodes.find(n => n.id === edge.source);
+    if (!srcNode) return '';
+
+    const latest = samplesRef.current[samplesRef.current.length - 1];
+    if (!latest) return '0.0000';
+
+    if (srcNode.type === 'clock') {
+      return `Time: ${latest.t.toFixed(4)}s`;
+    }
+    if (srcNode.type === 'sine') {
+      return `Sine (Ch1): ${latest.sin.toFixed(4)}`;
+    }
+    if (srcNode.type === 'cosine') {
+      return `Cosine (Ch2): ${latest.cos.toFixed(4)}`;
+    }
+    return `Value: ${latest.sin.toFixed(4)}`;
+  };
+
+  const spawnNodeAtCenter = useCallback((type: string) => {
+    const viewCenter = screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+    const defaultData = type === 'scope' ? { samplesRef: { current: [] } } : {};
+    const newNode = {
+      id: `${type}_${Date.now()}`,
+      type,
+      position: viewCenter,
+      data: defaultData,
+    };
+    setNodes((nds) => {
+      const next = nds.concat(newNode);
+      pushToHistory(next, edges);
+      return next;
+    });
+  }, [screenToFlowPosition, setNodes, edges, pushToHistory]);
+
+  const commandPaletteList = useMemo(() => {
+    return [
+      { id: 'add_clock', category: 'Block', name: 'Insert Clock Block', action: () => spawnNodeAtCenter('clock') },
+      { id: 'add_sine', category: 'Block', name: 'Insert Sine Wave Block', action: () => spawnNodeAtCenter('sine') },
+      { id: 'add_cosine', category: 'Block', name: 'Insert Cosine Wave Block', action: () => spawnNodeAtCenter('cosine') },
+      { id: 'add_scope', category: 'Block', name: 'Insert Scope View Block', action: () => spawnNodeAtCenter('scope') },
+      { id: 'add_gain', category: 'Block', name: 'Insert Gain Block', action: () => spawnNodeAtCenter('gain') },
+      { id: 'add_constant', category: 'Block', name: 'Insert Constant Block', action: () => spawnNodeAtCenter('constant') },
+      { id: 'add_sum', category: 'Block', name: 'Insert Sum Block', action: () => spawnNodeAtCenter('sum') },
+      
+      { id: 'sim_start', category: 'Simulation', name: 'Start Simulation', shortcut: 'Spacebar', action: handleStart },
+      { id: 'sim_stop', category: 'Simulation', name: 'Stop Simulation', shortcut: 'Escape', action: handleStop },
+      { id: 'sim_reset', category: 'Simulation', name: 'Reset Simulation', action: handleResetSimulation },
+      { id: 'sim_settings', category: 'Simulation', name: 'Open Solver Settings', action: () => setShowStepDialog(true) },
+
+      { id: 'exp_csv', category: 'Export', name: 'Export scope data to CSV', action: handleExportCSV },
+      { id: 'exp_png', category: 'Export', name: 'Export scope image to PNG', action: handleExportPNG },
+      { id: 'exp_report', category: 'Export', name: 'Generate Simulation Report', action: handleExportReport },
+
+      { id: 'tog_logs', category: 'View', name: 'Toggle Logs Terminal', shortcut: 'Ctrl+Shift+L', action: () => setShowDiagnostics(v => !v) },
+      { id: 'tog_minimap', category: 'View', name: 'Toggle MiniMap', shortcut: 'Ctrl+M', action: () => setShowMiniMap(v => !v) },
+      { id: 'tog_sidebar', category: 'View', name: 'Toggle Sidebar Rail', shortcut: 'Ctrl+B', action: () => setIsSidebarOpen(v => !v) },
+    ];
+  }, [spawnNodeAtCenter, handleStart, handleStop, handleResetSimulation, handleExportCSV, handleExportPNG, handleExportReport]);
+
   return (
     <div className="app-container">
       {/* Top Navbar */}
@@ -1190,7 +1526,7 @@ function FlowWorkspace({
         solver={solver}
         onToggleLogging={handleToggleLogging}
         isLogging={isLogging}
-        onToggleModelBrowser={() => setIsModelBrowserOpen(!isModelBrowserOpen)}
+        onToggleModelBrowser={() => setActivePanelCategory(activePanelCategory ? null : 'all')}
         onNewProject={handleNewProject}
         onSaveProject={handleSaveProject}
         onOpenLocalProject={handleOpenLocalProject}
@@ -1203,7 +1539,7 @@ function FlowWorkspace({
         onZoomIn={() => zoomIn()}
         onZoomOut={() => zoomOut()}
         onFitView={() => fitView({ padding: 0.2 })}
-        showGrid={showGrid}
+        showGrid={showGrid !== 'off'}
         onToggleGrid={handleToggleGrid}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={handleToggleSidebar}
@@ -1233,20 +1569,30 @@ function FlowWorkspace({
 
       <div className="workspace-container">
         {/* Left sidebar navigation rail */}
-        <Sidebar 
-          isModelBrowserOpen={isModelBrowserOpen}
-          onToggleModelBrowser={() => setIsModelBrowserOpen(!isModelBrowserOpen)}
-        />
+        {isSidebarOpen && (
+          <Sidebar
+            activePanelCategory={activePanelCategory as any}
+            onOpenPanel={(cat) => setActivePanelCategory(cat)}
+            onClosePanel={() => setActivePanelCategory(null)}
+            onToggleDiagnostics={() => setShowDiagnostics(v => !v)}
+          />
+        )}
 
         {/* Slide-out block library panel */}
-        <ModelBrowser 
-          isOpen={isModelBrowserOpen}
-          onClose={() => setIsModelBrowserOpen(false)}
+        <ModelBrowser
+          isOpen={activePanelCategory !== null}
+          onClose={() => setActivePanelCategory(null)}
+          initialCategory={(activePanelCategory as any) ?? 'all'}
+          style={{ left: isSidebarOpen ? 64 : 0 }}
         />
 
         {/* Central interactive canvas */}
-        <main className={`canvas-area${showGrid ? ' canvas-grid' : ''}`}>
-          <ReactFlow
+        <main className={`canvas-area${showGrid !== 'off' ? ' canvas-grid' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
+          <div 
+            style={{ flex: 1, position: 'relative', width: '100%' }}
+            onDoubleClick={handlePaneDoubleClick}
+          >
+            <ReactFlow
             nodes={updatedNodes}
             edges={edges}
             onNodesChange={onNodesChange}
@@ -1263,75 +1609,63 @@ function FlowWorkspace({
             snapToGrid
             snapGrid={[8, 8]}
             defaultMarkerColor="#0d9488"
+            onNodeClick={handleNodeClick}
+            onPaneClick={handlePaneClick}
+            panOnDrag={spacePressed}
+            selectionOnDrag={!spacePressed}
+            connectionRadius={20}
+            onEdgeMouseEnter={handleEdgeMouseEnter}
+            onEdgeMouseLeave={handleEdgeMouseLeave}
+            style={{ cursor: spacePressed ? 'grab' : 'default' }}
           >
-            {showGrid && <Background color="#bcc9c6" gap={40} size={1} />}
+            {showGrid === 'lines' && (
+              <Background
+                variant={BackgroundVariant.Lines}
+                gap={40}
+                lineWidth={1}
+                color={isDarkTheme ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.15)'}
+              />
+            )}
+            {showGrid === 'dots' && (
+              <Background
+                variant={BackgroundVariant.Dots}
+                gap={28}
+                size={2}
+                color={isDarkTheme ? 'rgba(255,255,255,0.55)' : '#000000'}
+              />
+            )}
             <Controls showZoom={false} showInteractive={false} showFitView={false} />
 
-            {/* Draggable Square HUD Mini Map Container (Inside ReactFlow Context) */}
-            {showMiniMap && (
-              <div
-                className="minimap-drag-container"
-                style={{
-                  position: 'absolute',
-                  bottom: minimapPos.y,
-                  left: minimapPos.x,
-                  zIndex: 1000,
-                  cursor: isDraggingMinimap.current ? 'grabbing' : 'grab',
-                  backgroundColor: '#ffffff',
-                  border: '2px solid #cbd5e1',
-                  borderRadius: 8,
-                  padding: 4,
-                  width: 140,
-                  height: 140,
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                  boxSizing: 'border-box',
-                  overflow: 'hidden',
-                  userSelect: 'none',
-                  pointerEvents: 'all'
+            {/* MiniMap — rendered directly as a ReactFlow child so the panel system works correctly.
+                panelPosition is not available in @xyflow/react v12; use style bottom/left/right instead. */}
+            {showMiniMap && !showDiagnostics && (
+              <MiniMap
+                nodeColor={(n) => {
+                  if (n.type === 'clock') return '#6366f1';
+                  if (n.type === 'sine') return '#0d9488';
+                  if (n.type === 'cosine') return '#d97706';
+                  if (n.type === 'scope') return '#8b5cf6';
+                  return '#94a3b8';
                 }}
-                onMouseDown={handleMinimapDragStart}
-              >
-                <div 
-                  style={{ 
-                    fontSize: 10, 
-                    fontWeight: 'bold', 
-                    color: '#475569', 
-                    textAlign: 'center', 
-                    padding: '2px 0 4px 0', 
-                    borderBottom: '1px solid #e2e8f0',
-                    marginBottom: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 4
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: 12 }}>map</span>
-                  MINI MAP
-                </div>
-                <div style={{ width: '100%', height: 110, position: 'relative' }}>
-                  <MiniMap
-                    nodeColor={(n) => {
-                      if (n.type === 'clock') return '#dee8ff';
-                      if (n.type === 'sine') return 'rgba(13, 148, 136, 0.1)';
-                      if (n.type === 'cosine') return 'rgba(217, 119, 6, 0.1)';
-                      if (n.type === 'scope') return '#e7eeff';
-                      return '#ffffff';
-                    }}
-                    maskColor="rgba(240, 243, 255, 0.6)"
-                    style={{
-                      position: 'absolute',
-                      width: '100%',
-                      height: '100%',
-                      margin: 0,
-                      left: 0,
-                      top: 0,
-                      background: 'transparent',
-                      border: 'none',
-                    }}
-                  />
-                </div>
-              </div>
+                nodeStrokeWidth={2}
+                maskColor={isDarkTheme ? 'rgba(30,45,66,0.55)' : 'rgba(224,232,255,0.5)'}
+                zoomable
+                pannable
+                style={{
+                  width: 180,
+                  height: 140,
+                  backgroundColor: isDarkTheme
+                    ? 'var(--surface-container)'
+                    : '#ffffff',
+                  border: `2px solid ${isDarkTheme ? 'var(--outline-variant)' : '#cbd5e1'}`,
+                  borderRadius: 10,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.14)',
+                  // Position at bottom-left (override default bottom-right panel CSS)
+                  bottom: 8,
+                  left: 8,
+                  right: 'auto',
+                }}
+              />
             )}
           </ReactFlow>
 
@@ -1347,13 +1681,36 @@ function FlowWorkspace({
             <button className="icon-btn" title="Fit to Screen (Ctrl+0)" onClick={() => fitView({ padding: 0.2 })}>
               <span className="material-symbols-outlined">fit_screen</span>
             </button>
-            <button className="icon-btn" title={showGrid ? 'Hide Grid (Ctrl+G)' : 'Show Grid (Ctrl+G)'}
+            <button
+              className="icon-btn"
+              title={
+                showGrid === 'off' ? 'Show Grid Lines (Ctrl+G)'
+                  : showGrid === 'lines' ? 'Switch to Dot Grid (Ctrl+G)'
+                    : 'Hide Grid (Ctrl+G)'
+              }
               onClick={handleToggleGrid}
-              style={{ color: showGrid ? 'var(--primary-teal)' : 'var(--on-surface-variant)' }}
+              style={{ color: showGrid !== 'off' ? 'var(--primary-teal)' : 'var(--on-surface-variant)' }}
             >
-              <span className="material-symbols-outlined">{showGrid ? 'grid_4x4' : 'grid_off'}</span>
+              <span className="material-symbols-outlined">
+                {showGrid === 'off' ? 'grid_off' : showGrid === 'lines' ? 'grid_4x4' : 'grain'}
+              </span>
             </button>
           </div>
+          </div>
+
+          {/* Bottom VS-Code style terminal panel */}
+          {showDiagnostics && (
+            <LogsTerminalPanel
+              onClose={() => setShowDiagnostics(false)}
+              samplesRef={samplesRef}
+              connectionState={connectionState}
+              send={send}
+              onSelectNode={(nodeId) => {
+                setSelectedNodeId(nodeId);
+              }}
+              logStream={logStream}
+            />
+          )}
         </main>
 
         {/* Right side parameters property sidebar */}
@@ -1379,6 +1736,7 @@ function FlowWorkspace({
           initialName={activeProjectName || ''}
           onClose={() => setShowSaveDialog(false)}
           onSave={handleSaveWithNewName}
+          isSaveAs={isSaveAsMode}
         />
       )}
 
@@ -1387,15 +1745,7 @@ function FlowWorkspace({
         <PerfHUD samplesRef={samplesRef} connectionState={connectionState} isPlaying={isPlaying} />
       )}
 
-      {/* Diagnostics Console Modal */}
-      {showDiagnostics && (
-        <DiagnosticsModal
-          onClose={() => setShowDiagnostics(false)}
-          samplesRef={samplesRef}
-          connectionState={connectionState}
-          send={send}
-        />
-      )}
+      {/* Diagnostics Console Modal removed (now rendered as docked Bottom panel) */}
 
       {/* Signal Analyzer (FFT) Modal */}
       {showFFT && (
@@ -1403,6 +1753,155 @@ function FlowWorkspace({
           onClose={() => setShowFFT(false)}
           samplesRef={samplesRef}
         />
+      )}
+
+      {/* Command Palette Overlay */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        commands={commandPaletteList}
+      />
+
+      {/* Live Wire Hover Tooltip */}
+      {hoveredEdgeInfo && (
+        <div
+          style={{
+            position: 'fixed',
+            left: hoveredEdgeInfo.x + 12,
+            top: hoveredEdgeInfo.y + 12,
+            zIndex: 200,
+            background: '#252526',
+            border: '1px solid #3c3c3c',
+            borderRadius: 4,
+            padding: '6px 10px',
+            color: '#fff',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '11px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {getEdgeValueString(hoveredEdgeInfo.edgeId)}
+        </div>
+      )}
+
+      {/* Quick Add Menu (Double-click Canvas) */}
+      {quickAddMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            left: quickAddMenu.x,
+            top: quickAddMenu.y,
+            zIndex: 150,
+            background: '#1e1e1e',
+            border: '1px solid #3c3c3c',
+            borderRadius: 6,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            padding: '4px',
+            width: '180px',
+            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <input
+            autoFocus
+            type="text"
+            placeholder="Search block to add..."
+            style={{
+              width: '100%',
+              background: '#252526',
+              border: '1px solid #3c3c3c',
+              borderRadius: 3,
+              color: '#fff',
+              fontSize: '11px',
+              padding: '4px 8px',
+              outline: 'none',
+              marginBottom: '4px',
+              boxSizing: 'border-box',
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setQuickAddMenu(null);
+              } else if (e.key === 'Enter') {
+                const targetVal = (e.target as HTMLInputElement).value.toLowerCase();
+                const matched = [
+                  { type: 'clock', label: 'Clock' },
+                  { type: 'sine', label: 'Sine Wave' },
+                  { type: 'cosine', label: 'Cosine Wave' },
+                  { type: 'scope', label: 'Scope View' },
+                  { type: 'gain', label: 'Gain' },
+                  { type: 'constant', label: 'Constant' },
+                  { type: 'sum', label: 'Sum' },
+                  { type: 'mux', label: 'Mux' },
+                  { type: 'switch', label: 'Switch' },
+                  { type: 'comparator', label: 'Comparator' },
+                  { type: 'probe', label: 'Probe' }
+                ].find(item => item.label.toLowerCase().includes(targetVal) || item.type.includes(targetVal));
+                
+                if (matched) {
+                  const defaultData = matched.type === 'scope' ? { samplesRef: { current: [] } } : {};
+                  const newNode = {
+                    id: `${matched.type}_${Date.now()}`,
+                    type: matched.type,
+                    position: { x: quickAddMenu.flowX, y: quickAddMenu.flowY },
+                    data: defaultData,
+                  };
+                  setNodes((nds) => {
+                    const next = nds.concat(newNode);
+                    pushToHistory(next, edges);
+                    return next;
+                  });
+                }
+                setQuickAddMenu(null);
+              }
+            }}
+          />
+          <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            {[
+              { type: 'clock', label: 'Clock' },
+              { type: 'sine', label: 'Sine Wave' },
+              { type: 'cosine', label: 'Cosine Wave' },
+              { type: 'scope', label: 'Scope View' },
+              { type: 'gain', label: 'Gain' },
+              { type: 'constant', label: 'Constant' },
+              { type: 'sum', label: 'Sum (Σ)' },
+              { type: 'mux', label: 'Mux 2:1' },
+              { type: 'switch', label: 'Switch' },
+              { type: 'comparator', label: 'Comparator' },
+              { type: 'probe', label: 'Signal Probe' }
+            ].map(item => (
+              <div
+                key={item.type}
+                onClick={() => {
+                  const defaultData = item.type === 'scope' ? { samplesRef: { current: [] } } : {};
+                  const newNode = {
+                    id: `${item.type}_${Date.now()}`,
+                    type: item.type,
+                    position: { x: quickAddMenu.flowX, y: quickAddMenu.flowY },
+                    data: defaultData,
+                  };
+                  setNodes((nds) => {
+                    const next = nds.concat(newNode);
+                    pushToHistory(next, edges);
+                    return next;
+                  });
+                  setQuickAddMenu(null);
+                }}
+                className="quick-add-item"
+                style={{
+                  padding: '4px 8px',
+                  cursor: 'pointer',
+                  color: '#ccc',
+                  fontSize: '11px',
+                  borderRadius: 3,
+                }}
+              >
+                {item.label}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Keyboard Shortcuts Modal */}
@@ -1530,8 +2029,8 @@ export default function App() {
   // Main simulation workspace
   return (
     <ReactFlowProvider>
-      <FlowWorkspace 
-        onGoToDashboard={() => setPage('dashboard')} 
+      <FlowWorkspace
+        onGoToDashboard={() => setPage('dashboard')}
         activeProjectName={activeProjectName}
         setActiveProjectName={setActiveProjectName}
       />

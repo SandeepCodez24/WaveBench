@@ -365,7 +365,7 @@ export function Toolbar({
                 {/* Grid */}
                 <button className="dropdown-item" onClick={() => { onToggleGrid(); close(); }}
                   style={{ display: 'flex', width: '100%', alignItems: 'center' }}>
-                  <span className="material-symbols-outlined" style={{ marginRight: 8 }}>{showGrid ? 'grid_off' : 'grid_4x4'}</span>
+                  <span className="material-symbols-outlined" style={{ marginRight: 8 }}>{showGrid ? 'grid_4x4' : 'grid_off'}</span>
                   <span style={{ flex: 1, textAlign: 'left' }}>{showGrid ? 'Hide Grid' : 'Show Grid'}</span>
                   <span className="menu-shortcut">Ctrl+G</span>
                 </button>

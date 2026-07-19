@@ -16,6 +16,7 @@
 
 #include "SimulationEngine.hpp"
 #include "ServerSession.hpp"
+#include "Logger.hpp"
 #include <iostream>
 #include <string>
 #include <cstdio>
@@ -73,25 +74,25 @@ int main() {
     ServerSession session;
     SimulationEngine engine;
 
-    std::cout << "[C++] WaveBench Studio Engine v1.0\n";
-    std::cout << "[C++] Listening on TCP port 5050...\n";
+    logMessage("info", "WaveBench Studio Engine v1.0 starting");
+    logMessage("info", "Listening on TCP port 5050");
 
     if (!session.listen(5050)) {
-        std::cerr << "[C++] Failed to start server. Exiting.\n";
+        logMessage("error", "Failed to start server. Exiting.");
         return 1;
     }
 
-    std::cout << "[C++] Waiting for Java gateway connection...\n";
+    logMessage("info", "Waiting for Java gateway connection");
     if (!session.acceptClient()) {
-        std::cerr << "[C++] Failed to accept client. Exiting.\n";
+        logMessage("error", "Failed to accept client. Exiting.");
         return 1;
     }
-    std::cout << "[C++] Java gateway connected.\n";
+    logMessage("info", "Java gateway connected");
 
     // Handle incoming JSON commands from the gateway
     session.startReceiving([&](const std::string& msg) {
         std::string type = jsonGetString(msg, "type");
-        std::cout << "[C++] Received: " << msg << "\n";
+        logMessage("info", "Received command: " + msg);
 
         if (type == "start") {
             // Start the simulation loop, streaming samples back over TCP
@@ -119,7 +120,7 @@ int main() {
             if (value > 0.0) {
                 engine.setStepSize(value);
             } else {
-                std::cerr << "[C++] Invalid setStepSize value.\n";
+                logMessage("warning", "Invalid setStepSize value");
             }
 
         } else if (type == "setSolver") {
@@ -170,16 +171,16 @@ int main() {
             session.sendLine(R"({"type":"pong"})");
 
         } else {
-            std::cout << "[C++] Unknown command type: " << type << "\n";
+            logMessage("warning", "Unknown command type: " + type);
         }
     });
 
     // Keep main thread alive until Enter is pressed
-    std::cout << "[C++] Engine ready. Press Enter to shut down.\n";
+    logMessage("info", "Engine ready. Press Enter to shut down.");
     std::cin.get();
 
     engine.stop();
     session.close();
-    std::cout << "[C++] Shutdown complete.\n";
+    logMessage("info", "Shutdown complete.");
     return 0;
 }

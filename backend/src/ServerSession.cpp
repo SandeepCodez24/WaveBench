@@ -16,6 +16,7 @@
 // ============================================================================
 
 #include "ServerSession.hpp"
+#include "Logger.hpp"
 #include <iostream>
 #include <thread>
 
@@ -30,7 +31,7 @@ bool ServerSession::listen(int port) {
     WSADATA wsa;
     int result = WSAStartup(MAKEWORD(2, 2), &wsa);
     if (result != 0) {
-        std::cerr << "[C++] WSAStartup failed with error: " << result << "\n";
+        logMessage("error", "WSAStartup failed with error: " + std::to_string(result));
         return false;
     }
     wsaInitialized_ = true;
@@ -38,8 +39,7 @@ bool ServerSession::listen(int port) {
     // Create the listening socket
     serverSock_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (serverSock_ == INVALID_SOCKET) {
-        std::cerr << "[C++] socket() failed with error: "
-                  << WSAGetLastError() << "\n";
+        logMessage("error", "socket() failed with error: " + std::to_string(WSAGetLastError()));
         WSACleanup();
         wsaInitialized_ = false;
         return false;
@@ -58,8 +58,7 @@ bool ServerSession::listen(int port) {
 
     if (bind(serverSock_, reinterpret_cast<sockaddr*>(&addr),
              sizeof(addr)) == SOCKET_ERROR) {
-        std::cerr << "[C++] bind() failed with error: "
-                  << WSAGetLastError() << "\n";
+        logMessage("error", "bind() failed with error: " + std::to_string(WSAGetLastError()));
         closesocket(serverSock_);
         serverSock_ = INVALID_SOCKET;
         WSACleanup();
@@ -69,8 +68,7 @@ bool ServerSession::listen(int port) {
 
     // Start listening (backlog of 1 — only one gateway connects)
     if (::listen(serverSock_, 1) == SOCKET_ERROR) {
-        std::cerr << "[C++] listen() failed with error: "
-                  << WSAGetLastError() << "\n";
+        logMessage("error", "listen() failed with error: " + std::to_string(WSAGetLastError()));
         closesocket(serverSock_);
         serverSock_ = INVALID_SOCKET;
         WSACleanup();
@@ -83,14 +81,13 @@ bool ServerSession::listen(int port) {
 
 bool ServerSession::acceptClient() {
     if (serverSock_ == INVALID_SOCKET) {
-        std::cerr << "[C++] Cannot accept — server socket not initialized.\n";
+        logMessage("error", "Cannot accept — server socket not initialized.");
         return false;
     }
 
     clientSock_ = accept(serverSock_, nullptr, nullptr);
     if (clientSock_ == INVALID_SOCKET) {
-        std::cerr << "[C++] accept() failed with error: "
-                  << WSAGetLastError() << "\n";
+        logMessage("error", "accept() failed with error: " + std::to_string(WSAGetLastError()));
         return false;
     }
 
@@ -116,12 +113,12 @@ void ServerSession::startReceiving(MessageHandler handler) {
             if (bytesRead <= 0) {
                 // Connection closed or error
                 if (bytesRead == 0) {
-                    std::cout << "[C++] Gateway disconnected gracefully.\n";
+                    logMessage("info", "Gateway disconnected gracefully.");
                 } else {
                     int err = WSAGetLastError();
                     // WSAECONNRESET = 10054, normal during shutdown
                     if (err != WSAECONNRESET && err != WSAEINTR) {
-                        std::cerr << "[C++] recv() error: " << err << "\n";
+                        logMessage("error", "recv() error: " + std::to_string(err));
                     }
                 }
                 connected_ = false;
@@ -169,7 +166,7 @@ void ServerSession::sendLine(const std::string& json) {
         if (sent == SOCKET_ERROR) {
             int err = WSAGetLastError();
             if (err != WSAECONNRESET) {
-                std::cerr << "[C++] send() error: " << err << "\n";
+                logMessage("error", "send() error: " + std::to_string(err));
             }
             connected_ = false;
             break;

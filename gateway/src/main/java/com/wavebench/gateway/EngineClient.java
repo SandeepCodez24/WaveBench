@@ -25,6 +25,21 @@ public class EngineClient {
     private volatile PrintWriter   out;
     private volatile Socket        socket;
     private final AtomicBoolean    connected = new AtomicBoolean(false);
+    private volatile Consumer<String> onLog;
+
+    public void setLogCallback(Consumer<String> onLog) {
+        this.onLog = onLog;
+    }
+
+    private void log(String level, String msg) {
+        if (onLog != null) {
+            onLog.accept(String.format(
+                "{\"type\":\"log\",\"level\":\"%s\",\"src\":\"gateway\",\"msg\":\"%s\"}",
+                level, msg.replace("\\", "\\\\").replace("\"", "\\\"")
+            ));
+        }
+        System.out.printf("[%s] GATEWAY  %s%n", level.toUpperCase(), msg);
+    }
 
     // -------------------------------------------------------------------------
     // Connection
@@ -51,15 +66,14 @@ public class EngineClient {
                 socket = new Socket(host, port);
                 break;
             } catch (IOException e) {
-                System.out.printf("[Gateway] Waiting for C++ engine... (attempt %d/%d)%n",
-                        attempt, maxRetries);
+                log("info", String.format("Waiting for C++ engine... (attempt %d/%d)", attempt, maxRetries));
                 Thread.sleep(retryDelayMs);
             }
         }
 
         if (socket == null) {
             throw new IOException(
-                "[Gateway] Could not connect to C++ engine at " + host + ":" + port
+                "Could not connect to C++ engine at " + host + ":" + port
                 + " after " + maxRetries + " attempts.");
         }
 
@@ -67,7 +81,7 @@ public class EngineClient {
         out = new PrintWriter(new BufferedWriter(
                 new OutputStreamWriter(socket.getOutputStream())), true);
         connected.set(true);
-        System.out.println("[Gateway] Connected to C++ engine at " + host + ":" + port);
+        log("info", "Connected to C++ engine at " + host + ":" + port);
 
         // ---- background reader ----
         final Socket finalSocket = socket;
@@ -80,7 +94,7 @@ public class EngineClient {
                 }
             } catch (IOException e) {
                 // Normal path when C++ closes the connection
-                System.out.println("[Gateway] C++ engine disconnected.");
+                log("warning", "C++ engine disconnected.");
             } finally {
                 connected.set(false);
             }
@@ -103,7 +117,7 @@ public class EngineClient {
         if (connected.get() && out != null) {
             out.println(json);   // println appends '\n'; auto-flush sends it immediately
         } else {
-            System.out.println("[Gateway] send() ignored — not connected to C++ engine.");
+            log("warning", "send() ignored — not connected to C++ engine.");
         }
     }
 
@@ -123,7 +137,7 @@ public class EngineClient {
                 socket.close();
             }
         } catch (IOException e) {
-            System.err.println("[Gateway] Error closing engine socket: " + e.getMessage());
+            log("error", "Error closing engine socket: " + e.getMessage());
         }
         connected.set(false);
     }

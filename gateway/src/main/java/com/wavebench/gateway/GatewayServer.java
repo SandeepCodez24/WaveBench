@@ -46,6 +46,9 @@ public class GatewayServer extends WebSocketServer {
         this.engine = engine;
         setReuseAddr(true);          // allow quick restart without "address already in use"
         setConnectionLostTimeout(30); // ping browsers every 30 s to keep connections alive
+        
+        // Wire up the engine client's log callback to broadcast to websocket clients
+        this.engine.setLogCallback(this::broadcast);
     }
 
     // -------------------------------------------------------------------------
@@ -54,15 +57,12 @@ public class GatewayServer extends WebSocketServer {
 
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
-        System.out.println("[Gateway] Browser connected:    " + conn.getRemoteSocketAddress());
-        System.out.println("[Gateway] Active connections: " + getConnections().size());
+        logAndBroadcast("info", "Browser connected: " + conn.getRemoteSocketAddress());
     }
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        System.out.printf("[Gateway] Browser disconnected  (code=%d reason='%s' remote=%b)%n",
-                code, reason, remote);
-        System.out.println("[Gateway] Active connections: " + getConnections().size());
+        logAndBroadcast("info", "Browser disconnected: " + conn.getRemoteSocketAddress() + " (reason: " + reason + ")");
     }
 
     /**
@@ -82,8 +82,10 @@ public class GatewayServer extends WebSocketServer {
     @Override
     public void onMessage(WebSocket conn, String message) {
         if (message.contains("\"type\":\"save_project\"")) {
+            logAndBroadcast("info", "Saving project to database");
             handleSaveProject(conn, message);
         } else if (message.contains("\"type\":\"load_project\"")) {
+            logAndBroadcast("info", "Loading project from database");
             handleLoadProject(conn, message);
         } else if (message.contains("\"type\":\"list_projects\"")) {
             handleListProjects(conn);
@@ -95,9 +97,19 @@ public class GatewayServer extends WebSocketServer {
                 || message.contains("\"type\":\"set_stop_time\"")
                 || message.contains("\"type\":\"get_status\"")) {
             // New engine-control commands — forward directly to C++
+            if (message.contains("\"type\":\"reset\"")) {
+                logAndBroadcast("info", "Simulation reset requested");
+            }
             System.out.println("[Gateway] Browser → C++ (engine cmd): " + message);
             engine.send(message);
         } else {
+            if (message.contains("\"type\":\"start\"")) {
+                logAndBroadcast("info", "Simulation start requested");
+            } else if (message.contains("\"type\":\"stop\"")) {
+                logAndBroadcast("info", "Simulation stop requested");
+            } else if (message.contains("\"type\":\"config\"")) {
+                logAndBroadcast("info", "Simulation configuration updated");
+            }
             System.out.println("[Gateway] Browser → C++: " + message);
             engine.send(message);
         }
@@ -136,7 +148,7 @@ public class GatewayServer extends WebSocketServer {
             }
 
             File file = new File(dir, name + ".json");
-            try (FileWriter writer = new FileWriter(file)) {
+            try (java.io.BufferedWriter writer = java.nio.file.Files.newBufferedWriter(file.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
                 writer.write(message);
             }
             System.out.println("[Gateway] Saved project: " + file.getAbsolutePath());
@@ -163,7 +175,8 @@ public class GatewayServer extends WebSocketServer {
         }
 
         try {
-            String content = new String(Files.readAllBytes(Paths.get(file.getPath())));
+            byte[] bytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(file.getPath()));
+            String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
             content = content.replaceFirst("\"type\":\"save_project\"", "\"type\":\"project_loaded\"");
             conn.send(content);
             System.out.println("[Gateway] Loaded project: " + file.getAbsolutePath());
@@ -213,14 +226,12 @@ public class GatewayServer extends WebSocketServer {
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
-        String remote = (conn != null) ? conn.getRemoteSocketAddress().toString() : "unknown";
-        System.err.println("[Gateway] WebSocket error from " + remote + ": " + ex.getMessage());
-        ex.printStackTrace();
+        logAndBroadcast("error", "WebSocket error: " + ex.getMessage());
     }
 
     @Override
     public void onStart() {
-        System.out.println("[Gateway] WebSocket server started — listening on ws://localhost:" + getPort());
+        logAndBroadcast("info", "WebSocket server started on ws://localhost:" + getPort());
     }
 
     // -------------------------------------------------------------------------
@@ -239,6 +250,41 @@ public class GatewayServer extends WebSocketServer {
         if (clients.isEmpty()) return;   // no browsers — avoid unnecessary work
 
         broadcast(json);                 // thread-safe broadcast provided by java_websocket
+    }
+
+    /**
+     * Broadcasts a JSON-formatted log message to all connected clients.
+     * If the raw line is already JSON, it is forwarded directly. Otherwise,
+     * it is wrapped inside a JSON log envelope.
+     */
+    public void broadcastLog(String rawLine) {
+        if (rawLine == null || rawLine.trim().isEmpty()) return;
+
+        String formattedLog;
+        String trimmed = rawLine.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}") && trimmed.contains("\"level\"")) {
+            // Add type parameter to C++ JSON log
+            formattedLog = "{\"type\":\"log\"," + trimmed.substring(1);
+        } else {
+            String escaped = trimmed.replace("\\", "\\\\").replace("\"", "\\\"");
+            formattedLog = String.format(
+                "{\"type\":\"log\",\"level\":\"info\",\"src\":\"engine\",\"msg\":\"%s\"}",
+                escaped
+            );
+        }
+        broadcast(formattedLog);
+    }
+
+    /**
+     * Broadcasts a gateway-level log message to all connected WebSocket clients.
+     */
+    public void logAndBroadcast(String level, String msg) {
+        String json = String.format(
+            "{\"type\":\"log\",\"level\":\"%s\",\"src\":\"gateway\",\"msg\":\"%s\"}",
+            level, msg.replace("\\", "\\\\").replace("\"", "\\\"")
+        );
+        broadcast(json);
+        System.out.printf("[%s] GATEWAY  %s%n", level.toUpperCase(), msg);
     }
 
     /**

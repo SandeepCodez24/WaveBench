@@ -1,18 +1,25 @@
-<!DOCTYPE html><html class="light" lang="en"><head>
-<meta charset="utf-8">
-<meta content="width=device-width, initial-scale=1.0" name="viewport">
-<title>WaveBench Studio | Simulation Workspace</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<style>
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>WaveBench Studio | Simulation Workspace</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap"
+    rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+    rel="stylesheet">
+  <style>
     :root {
       --primary-teal: #00685f;
       --secondary-amber: #904d00;
       --surface-base: #f9f9ff;
       --surface-panel: #e7eeff;
     }
-    
+
     body {
       background-color: var(--surface-base);
       color: #111c2d;
@@ -29,15 +36,31 @@
       stroke-dasharray: 4, 12;
       animation: flow 2s linear infinite;
     }
+
     @keyframes flow {
-      to { stroke-dashoffset: -16; }
+      to {
+        stroke-dashoffset: -16;
+      }
     }
 
     /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #bcc9c6; border-radius: 2px; }
-    ::-webkit-scrollbar-thumb:hover { background: #6d7a77; }
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #bcc9c6;
+      border-radius: 2px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #6d7a77;
+    }
 
     /* Node Port Interaction */
     .port-active:hover {
@@ -53,12 +76,12 @@
     /* Grid Background Effect */
     .canvas-grid {
       background-size: 40px 40px;
-      background-image: 
+      background-image:
         linear-gradient(to right, rgba(109, 122, 119, 0.05) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(109, 122, 119, 0.05) 1px, transparent 1px);
     }
   </style>
-<script id="tailwind-config">
+  <script id="tailwind-config">
     tailwind.config = {
       darkMode: "class",
       theme: {
@@ -143,300 +166,398 @@
     }
   </script>
 </head>
-<body class="bg-background text-on-surface selection:bg-primary/10" style="background-color: rgb(249, 249, 255); color: rgb(17, 28, 45);">
-<!-- TOP NAV BAR -->
-<header class="flex justify-between items-center px-md w-full sticky top-0 z-50 bg-surface-container border-b border-outline-variant h-12 shadow-sm text-on-surface">
-<div class="flex items-center gap-lg">
-<span class="font-headline-md text-headline-md font-bold text-primary" style="color: rgb(13, 148, 136);">WaveBench Studio</span>
-<nav class="hidden md:flex gap-md h-12">
-<button class="font-body-md text-body-md text-primary font-bold border-b-2 border-primary px-2 transition-colors" style="color: rgb(13, 148, 136);">File</button>
-<button class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">Edit</button>
-<button class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">Simulation</button>
-<button class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">View</button>
-<button class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">Tools</button>
-<button class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">Help</button>
-</nav>
-</div>
-<div class="flex items-center gap-sm">
-<div class="flex bg-surface-container-lowest border border-outline-variant rounded px-sm h-8 items-center gap-xs mr-md group cursor-pointer hover:border-primary transition-colors" onclick="toggleModal('simulation-settings')">
-<span class="font-label-sm text-label-sm text-on-surface-variant">Step Size:</span>
-<span class="font-label-md text-label-md text-primary" style="color: rgb(13, 148, 136);">0.001s</span>
-<span class="material-symbols-outlined text-[16px] text-outline">settings_input_component</span>
-</div>
-<div class="flex gap-1">
-<button class="p-xs hover:bg-surface-container-highest rounded-lg transition-colors text-primary" style="color: rgb(13, 148, 136);"><span class="material-symbols-outlined">play_arrow</span></button>
-<button class="p-xs hover:bg-surface-container-highest rounded-lg transition-colors text-error"><span class="material-symbols-outlined">stop</span></button>
-<button class="p-xs hover:bg-surface-container-highest rounded-lg transition-colors text-on-surface-variant"><span class="material-symbols-outlined">settings</span></button>
-<button class="p-xs hover:bg-surface-container-highest rounded-lg transition-colors text-on-surface-variant"><span class="material-symbols-outlined">account_circle</span></button>
-</div>
-</div>
-</header>
-<!-- MAIN WORKSPACE CONTAINER -->
-<div class="flex h-[calc(100vh-48px)] w-full overflow-hidden">
-<!-- SIDE NAV BAR (RAIL) -->
-<aside class="fixed left-0 top-12 h-[calc(100vh-48px)] w-16 z-40 bg-surface-container border-r border-outline-variant flex flex-col justify-between items-center py-md shadow-sm">
-<div class="flex flex-col items-center gap-xs w-full px-xs">
-<div class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all" onclick="toggleModelBrowser()">
-<span class="material-symbols-outlined">near_me</span>
-<span class="font-label-sm text-[9px] uppercase tracking-tighter">Pointer</span>
-</div>
-<div class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-primary bg-primary/10 rounded-xl transition-all" style="color: rgb(13, 148, 136); background-color: rgba(13, 148, 136, 0.1);">
-<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">extension</span>
-<span class="font-label-sm text-[9px] uppercase tracking-tighter">Blocks</span>
-</div>
-<div class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all">
-<span class="material-symbols-outlined">timeline</span>
-<span class="font-label-sm text-[9px] uppercase tracking-tighter">Signals</span>
-</div>
-<div class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all">
-<span class="material-symbols-outlined">account_tree</span>
-<span class="font-label-sm text-[9px] uppercase tracking-tighter">Logic</span>
-</div>
-</div>
-<div class="flex flex-col items-center gap-xs w-full px-xs">
-<div class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all">
-<span class="material-symbols-outlined">help</span>
-<span class="font-label-sm text-[9px] uppercase tracking-tighter">Help</span>
-</div>
-<div class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all">
-<span class="material-symbols-outlined">terminal</span>
-<span class="font-label-sm text-[9px] uppercase tracking-tighter">Logs</span>
-</div>
-</div>
-</aside>
-<!-- MODEL BROWSER (SLIDE OUT PANEL) -->
-<div class="fixed left-16 top-12 h-[calc(100vh-48px)] w-64 bg-surface-container-low border-r border-outline-variant z-30 panel-transition -translate-x-full shadow-xl" id="model-browser">
-<div class="p-md border-b border-outline-variant flex justify-between items-center bg-surface-container">
-<h3 class="font-headline-md text-headline-md text-on-surface">Model Browser</h3>
-<button class="text-on-surface-variant hover:text-primary transition-colors" onclick="toggleModelBrowser()"><span class="material-symbols-outlined">close</span></button>
-</div>
-<div class="p-sm flex flex-col gap-sm overflow-y-auto h-full pb-20">
-<div class="relative">
-<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-sm py-xs text-body-md focus:border-primary focus:ring-1 focus:ring-primary/20" placeholder="Filter blocks..." type="text">
-<span class="material-symbols-outlined absolute right-2 top-1.5 text-outline text-lg">search</span>
-</div>
-<div class="space-y-2">
-<details class="group" open="">
-<summary class="flex items-center gap-xs font-label-md text-label-md text-outline cursor-pointer hover:text-on-surface uppercase tracking-wider p-xs rounded hover:bg-surface-container-highest">
-<span class="material-symbols-outlined text-sm transition-transform group-open:rotate-90">keyboard_arrow_right</span>
-            Sources
-          </summary>
-<div class="ml-4 mt-2 space-y-1">
-<div class="flex items-center gap-xs p-xs hover:bg-surface-container-highest rounded-lg cursor-grab transition-colors">
-<span class="material-symbols-outlined text-primary text-lg">schedule</span>
-<span class="font-body-md text-body-md">Clock</span>
-</div>
-<div class="flex items-center gap-xs p-xs hover:bg-surface-container-highest rounded-lg cursor-grab transition-colors">
-<span class="material-symbols-outlined text-primary text-lg">waves</span>
-<span class="font-body-md text-body-md">Sine Wave</span>
-</div>
-</div>
-</details>
-</div>
-</div>
-</div>
-<!-- CANVAS AREA -->
-<main class="flex-1 ml-16 relative bg-surface-bright overflow-hidden canvas-grid"><!-- SVG Connection Layer -->
-<svg class="absolute inset-0 w-full h-full pointer-events-none z-10">
-<defs>
-<marker id="arrow" markerHeight="4" markerWidth="4" orient="auto-start-reverse" refX="5" refY="5" viewBox="0 0 10 10">
-<path d="M 0 0 L 10 5 L 0 10 z" fill="#0d9488"></path>
-</marker>
-</defs>
-<!-- Connections with design system primary teal -->
-<path class="signal-path" d="M 280 200 L 400 200" fill="none" stroke="#0d9488" stroke-width="2"></path>
-<path class="signal-path" d="M 520 200 L 650 200" fill="none" stroke="#0d9488" stroke-width="2"></path>
-<path class="signal-path opacity-40" d="M 280 200 L 320 200 L 320 340 L 400 340" fill="none" stroke="#0d9488" stroke-width="2"></path>
-<path class="signal-path opacity-40" d="M 520 340 L 600 340 L 600 240 L 650 240" fill="none" stroke="#0d9488" stroke-width="2"></path>
-</svg>
-<!-- SIMULATION NODES -->
-<div class="relative z-20 w-full h-full p-xl">
-<!-- Block: Clock -->
-<div class="absolute left-40 top-40 w-44 bg-surface-container-low border border-outline-variant rounded-xl shadow-sm group hover:border-primary hover:shadow-md transition-all">
-<div class="px-sm py-1.5 bg-surface-container flex justify-between items-center rounded-t-xl border-b border-outline-variant">
-<span class="font-label-sm text-label-sm text-on-surface flex items-center gap-xs"><span class="material-symbols-outlined text-[14px]">schedule</span> CLOCK</span>
-<span class="material-symbols-outlined text-[14px] text-outline cursor-pointer hover:text-on-surface">more_vert</span>
-</div>
-<div class="p-sm flex flex-col gap-2">
-<div class="flex justify-between items-center">
-<span class="font-label-md text-label-md text-on-surface-variant">t: 1.452s</span>
-<div class="w-3 h-3 rounded-full bg-primary border-2 border-surface-container-lowest port-active cursor-crosshair"></div>
-</div>
-</div>
-</div>
-<!-- Block: Sine -->
-<div class="absolute left-96 top-40 w-44 bg-surface-container-low border border-outline-variant rounded-xl shadow-sm group hover:border-primary hover:shadow-md transition-all">
-<div class="px-sm py-1.5 bg-surface-container flex justify-between items-center rounded-t-xl border-b border-outline-variant">
-<span class="font-label-sm text-label-sm text-on-surface flex items-center gap-xs"><span class="material-symbols-outlined text-[14px]">waves</span> SINE</span>
-</div>
-<div class="p-sm flex justify-between items-center">
-<div class="w-3 h-3 rounded-full bg-outline-variant border-2 border-surface-container-lowest port-active cursor-crosshair"></div>
-<div class="text-right">
-<p class="font-label-sm text-[9px] text-on-surface-variant">Freq: 60Hz</p>
-<p class="font-label-md text-label-md text-primary font-bold">0.866</p>
-</div>
-<div class="w-3 h-3 rounded-full bg-primary border-2 border-surface-container-lowest port-active cursor-crosshair"></div>
-</div>
-</div>
-<!-- Block: Scope -->
-<div class="absolute left-[640px] top-40 w-80 bg-surface-container-low border-2 border-primary/20 rounded-xl shadow-lg overflow-hidden border-outline-variant shadow-sm">
-<div class="px-sm py-2 bg-surface-container flex justify-between items-center border-b border-outline-variant">
-<span class="font-label-sm text-label-sm text-primary font-bold flex items-center gap-xs"><span class="material-symbols-outlined text-[14px]">analytics</span> SCOPE_VIEW_01</span>
-<div class="flex gap-2">
-<span class="material-symbols-outlined text-[14px] text-outline cursor-pointer hover:text-on-surface">open_in_full</span>
-<span class="material-symbols-outlined text-[14px] text-outline cursor-pointer hover:text-on-surface">close</span>
-</div>
-</div>
-<div class="p-md">
-<div class="w-full h-40 bg-surface-bright border border-outline-variant rounded-lg relative overflow-hidden flex items-end">
-<!-- Grid lines -->
-<div class="absolute inset-0 opacity-10" style="background-size: 20px 20px; background-image: linear-gradient(to right, #6d7a77 1px, transparent 1px), linear-gradient(to bottom, #6d7a77 1px, transparent 1px);"></div>
-<!-- Waveform SVG -->
-<svg class="w-full h-full absolute inset-0">
-<path d="M 0 80 Q 20 20 40 80 T 80 80 T 120 80 T 160 80 T 200 80 T 240 80 T 280 80" fill="none" stroke="#0d9488" stroke-width="2.5"></path>
-<path d="M 0 80 Q 20 140 40 80 T 80 80 T 120 80 T 160 80 T 200 80 T 240 80 T 280 80" fill="none" stroke="#904d00" stroke-dasharray="4" stroke-width="1.5"></path>
-</svg>
-<div class="absolute bottom-2 right-2 flex gap-md">
-<span class="font-label-sm text-[10px] text-primary bg-primary/5 px-1.5 py-0.5 rounded">Ch1: Sine</span>
-<span class="font-label-sm text-[10px] text-secondary bg-secondary/5 px-1.5 py-0.5 rounded">Ch2: Cos</span>
-</div>
-</div>
-</div>
-<div class="px-md pb-3 flex justify-between items-center">
-<div class="flex gap-1.5">
-<div class="w-2.5 h-2.5 rounded-full bg-outline-variant"></div>
-<div class="w-2.5 h-2.5 rounded-full bg-outline-variant"></div>
-</div>
-<span class="font-label-sm text-label-sm text-outline">X: 1.452s | Y: 0.866</span>
-</div>
-</div>
-</div>
-<!-- BOTTOM STATUS BAR -->
-<footer class="absolute bottom-0 left-0 w-full h-8 bg-surface-container border-t border-outline-variant px-md flex items-center justify-between z-30 shadow-[0_-1px_3px_rgba(0,0,0,0.05)]">
-<div class="flex items-center gap-md">
-<div class="flex items-center gap-xs">
-<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-<span class="font-label-sm text-label-sm text-on-surface font-bold">SOLVER RUNNING</span>
-</div>
-<span class="font-label-sm text-label-sm text-outline-variant">|</span>
-<span class="font-label-sm text-label-sm text-on-surface-variant">CPU: 12%</span>
-<span class="font-label-sm text-label-sm text-on-surface-variant">RAM: 4.2GB</span>
-</div>
-<div class="flex items-center gap-sm">
-<span class="font-label-sm text-label-sm text-on-surface-variant">UTF-8</span>
-<span class="font-label-sm text-label-sm text-on-surface-variant">LN 42, COL 18</span>
-<span class="material-symbols-outlined text-[16px] text-outline cursor-pointer hover:text-on-surface transition-colors">notifications</span>
-</div>
-</footer>
-<!-- Floating Tools -->
-<div class="absolute bottom-12 right-6 bg-surface-container-lowest border border-outline-variant rounded-full px-4 py-2 flex items-center gap-md shadow-lg z-30">
-<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">zoom_in</span></button>
-<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">zoom_out</span></button>
-<span class="h-4 w-px bg-outline-variant"></span>
-<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">center_focus_strong</span></button>
-<button class="text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">grid_4x4</span></button>
-</div></main>
-<!-- RIGHT PANEL: PROPERTIES -->
-<aside class="w-72 bg-surface-container border-l border-outline-variant h-full p-md z-30 hidden xl:block overflow-y-auto shadow-inner">
-<div class="flex items-center gap-xs mb-lg pb-sm border-b border-outline-variant">
-<span class="material-symbols-outlined text-primary">tune</span>
-<h3 class="font-headline-md text-headline-md text-on-surface">Properties</h3>
-</div>
-<div class="space-y-lg">
-<div>
-<label class="font-label-sm text-label-sm text-outline uppercase block mb-md tracking-widest">Selected: Sine Wave</label>
-<div class="space-y-md bg-surface-container-low p-md rounded-xl border border-outline-variant shadow-sm">
-<div>
-<div class="flex justify-between mb-2">
-<span class="font-body-md text-body-md text-on-surface-variant">Amplitude</span>
-<span class="font-label-md text-label-md text-primary font-bold">1.00</span>
-</div>
-<input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="100">
-</div>
-<div>
-<div class="flex justify-between mb-2">
-<span class="font-body-md text-body-md text-on-surface-variant">Frequency (Hz)</span>
-<span class="font-label-md text-label-md text-primary font-bold">60.00</span>
-</div>
-<input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="60">
-</div>
-<div class="flex items-center gap-sm pt-1">
-<input checked="" class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary focus:ring-primary/20" type="checkbox">
-<span class="font-body-md text-body-md text-on-surface">Output Discrete</span>
-</div>
-</div>
-</div>
-<div>
-<label class="font-label-sm text-label-sm text-outline uppercase block mb-sm tracking-widest">Solver Params</label>
-<div class="p-sm bg-surface-container-lowest rounded-xl border border-outline-variant space-y-sm shadow-sm">
-<div class="flex justify-between px-xs">
-<span class="font-body-md text-body-md text-on-surface-variant">Type</span>
-<span class="font-body-md text-body-md text-on-surface font-medium">Fixed-Step</span>
-</div>
-<div class="flex justify-between px-xs">
-<span class="font-body-md text-body-md text-on-surface-variant">Solver</span>
-<span class="font-body-md text-body-md text-on-surface font-medium">ode4 (RK)</span>
-</div>
-</div>
-</div>
-</div>
-</aside>
-</div>
-<!-- MODAL: SIMULATION SETTINGS -->
-<div class="fixed inset-0 z-[100] hidden items-center justify-center p-md bg-inverse-surface/40 backdrop-blur-[2px]" id="simulation-settings">
-<div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-<div class="p-lg border-b border-outline-variant flex justify-between items-center bg-surface-container">
-<h3 class="font-headline-md text-headline-md text-on-surface">Solver Settings</h3>
-<button class="text-on-surface-variant hover:text-on-surface transition-colors" onclick="toggleModal('simulation-settings')"><span class="material-symbols-outlined">close</span></button>
-</div>
-<div class="p-lg space-y-md">
-<div class="space-y-xs">
-<label class="font-label-md text-label-md text-outline uppercase tracking-wider">Step Size (Seconds)</label>
-<input class="w-full bg-surface-bright border border-outline-variant rounded-lg px-sm py-2 text-body-md font-label-md focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all" type="text" value="0.001">
-<p class="text-[11px] text-on-surface-variant italic">Lower values increase accuracy but reduce real-time performance.</p>
-</div>
-<div class="space-y-xs">
-<label class="font-label-md text-label-md text-outline uppercase tracking-wider">Simulation Time</label>
-<div class="flex gap-sm">
-<input class="flex-1 bg-surface-bright border border-outline-variant rounded-lg px-sm py-2 text-body-md font-label-md focus:border-primary focus:ring-1 focus:ring-primary/10" type="text" value="0.0">
-<span class="flex items-center text-outline">to</span>
-<input class="flex-1 bg-surface-bright border border-outline-variant rounded-lg px-sm py-2 text-body-md font-label-md focus:border-primary focus:ring-1 focus:ring-primary/10" type="text" value="10.0">
-</div>
-</div>
-<div class="flex items-center gap-sm pt-2">
-<input class="w-5 h-5 rounded border-outline-variant bg-surface-bright text-primary focus:ring-primary/10" type="checkbox">
-<span class="font-body-md text-body-md text-on-surface font-medium">Real-time synchronization</span>
-</div>
-</div>
-<div class="p-lg bg-surface-container flex justify-end gap-md">
-<button class="px-lg py-2 border border-outline-variant rounded-full font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-all" onclick="toggleModal('simulation-settings')">CANCEL</button>
-<button class="px-lg py-2 bg-primary text-on-primary rounded-full font-label-md text-label-md font-bold shadow-md hover:shadow-lg hover:opacity-95 transition-all" onclick="toggleModal('simulation-settings')">APPLY CHANGES</button>
-</div>
-</div>
-</div>
-<script>
-  function toggleModal(id) {
-    const modal = document.getElementById(id);
-    if (modal.classList.contains('hidden')) {
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    } else {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+
+<body class="bg-background text-on-surface selection:bg-primary/10"
+  style="background-color: rgb(249, 249, 255); color: rgb(17, 28, 45);">
+  <!-- TOP NAV BAR -->
+  <header
+    class="flex justify-between items-center px-md w-full sticky top-0 z-50 bg-surface-container border-b border-outline-variant h-12 shadow-sm text-on-surface">
+    <div class="flex items-center gap-lg">
+      <span class="font-headline-md text-headline-md font-bold text-primary" style="color: rgb(13, 148, 136);">WaveBench
+        Studio</span>
+      <nav class="hidden md:flex gap-md h-12">
+        <button
+          class="font-body-md text-body-md text-primary font-bold border-b-2 border-primary px-2 transition-colors"
+          style="color: rgb(13, 148, 136);">File</button>
+        <button
+          class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">Edit</button>
+        <button
+          class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">Simulation</button>
+        <button
+          class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">View</button>
+        <button
+          class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">Tools</button>
+        <button
+          class="font-body-md text-body-md text-on-surface-variant hover:bg-surface-container-highest px-2 transition-colors">Help</button>
+      </nav>
+    </div>
+    <div class="flex items-center gap-sm">
+      <div
+        class="flex bg-surface-container-lowest border border-outline-variant rounded px-sm h-8 items-center gap-xs mr-md group cursor-pointer hover:border-primary transition-colors"
+        onclick="toggleModal('simulation-settings')">
+        <span class="font-label-sm text-label-sm text-on-surface-variant">Step Size:</span>
+        <span class="font-label-md text-label-md text-primary" style="color: rgb(13, 148, 136);">0.001s</span>
+        <span class="material-symbols-outlined text-[16px] text-outline">settings_input_component</span>
+      </div>
+      <div class="flex gap-1">
+        <button class="p-xs hover:bg-surface-container-highest rounded-lg transition-colors text-primary"
+          style="color: rgb(13, 148, 136);"><span class="material-symbols-outlined">play_arrow</span></button>
+        <button class="p-xs hover:bg-surface-container-highest rounded-lg transition-colors text-error"><span
+            class="material-symbols-outlined">stop</span></button>
+        <button
+          class="p-xs hover:bg-surface-container-highest rounded-lg transition-colors text-on-surface-variant"><span
+            class="material-symbols-outlined">settings</span></button>
+        <button
+          class="p-xs hover:bg-surface-container-highest rounded-lg transition-colors text-on-surface-variant"><span
+            class="material-symbols-outlined">account_circle</span></button>
+      </div>
+    </div>
+  </header>
+  <!-- MAIN WORKSPACE CONTAINER -->
+  <div class="flex h-[calc(100vh-48px)] w-full overflow-hidden">
+    <!-- SIDE NAV BAR (RAIL) -->
+    <aside
+      class="fixed left-0 top-12 h-[calc(100vh-48px)] w-16 z-40 bg-surface-container border-r border-outline-variant flex flex-col justify-between items-center py-md shadow-sm">
+      <div class="flex flex-col items-center gap-xs w-full px-xs">
+        <div
+          class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all"
+          onclick="toggleModelBrowser()">
+          <span class="material-symbols-outlined">near_me</span>
+          <span class="font-label-sm text-[9px] uppercase tracking-tighter">Pointer</span>
+        </div>
+        <div
+          class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-primary bg-primary/10 rounded-xl transition-all"
+          style="color: rgb(13, 148, 136); background-color: rgba(13, 148, 136, 0.1);">
+          <span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">extension</span>
+          <span class="font-label-sm text-[9px] uppercase tracking-tighter">Blocks</span>
+        </div>
+        <div
+          class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all">
+          <span class="material-symbols-outlined">timeline</span>
+          <span class="font-label-sm text-[9px] uppercase tracking-tighter">Signals</span>
+        </div>
+        <div
+          class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all">
+          <span class="material-symbols-outlined">account_tree</span>
+          <span class="font-label-sm text-[9px] uppercase tracking-tighter">Logic</span>
+        </div>
+      </div>
+      <div class="flex flex-col items-center gap-xs w-full px-xs">
+        <div
+          class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all">
+          <span class="material-symbols-outlined">help</span>
+          <span class="font-label-sm text-[9px] uppercase tracking-tighter">Help</span>
+        </div>
+        <div
+          class="cursor-pointer flex flex-col items-center gap-xs p-sm w-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-all">
+          <span class="material-symbols-outlined">terminal</span>
+          <span class="font-label-sm text-[9px] uppercase tracking-tighter">Logs</span>
+        </div>
+      </div>
+    </aside>
+    <!-- MODEL BROWSER (SLIDE OUT PANEL) -->
+    <div
+      class="fixed left-16 top-12 h-[calc(100vh-48px)] w-64 bg-surface-container-low border-r border-outline-variant z-30 panel-transition -translate-x-full shadow-xl"
+      id="model-browser">
+      <div class="p-md border-b border-outline-variant flex justify-between items-center bg-surface-container">
+        <h3 class="font-headline-md text-headline-md text-on-surface">Model Browser</h3>
+        <button class="text-on-surface-variant hover:text-primary transition-colors"
+          onclick="toggleModelBrowser()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="p-sm flex flex-col gap-sm overflow-y-auto h-full pb-20">
+        <div class="relative">
+          <input
+            class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-sm py-xs text-body-md focus:border-primary focus:ring-1 focus:ring-primary/20"
+            placeholder="Filter blocks..." type="text">
+          <span class="material-symbols-outlined absolute right-2 top-1.5 text-outline text-lg">search</span>
+        </div>
+        <div class="space-y-2">
+          <details class="group" open="">
+            <summary
+              class="flex items-center gap-xs font-label-md text-label-md text-outline cursor-pointer hover:text-on-surface uppercase tracking-wider p-xs rounded hover:bg-surface-container-highest">
+              <span
+                class="material-symbols-outlined text-sm transition-transform group-open:rotate-90">keyboard_arrow_right</span>
+              Sources
+            </summary>
+            <div class="ml-4 mt-2 space-y-1">
+              <div
+                class="flex items-center gap-xs p-xs hover:bg-surface-container-highest rounded-lg cursor-grab transition-colors">
+                <span class="material-symbols-outlined text-primary text-lg">schedule</span>
+                <span class="font-body-md text-body-md">Clock</span>
+              </div>
+              <div
+                class="flex items-center gap-xs p-xs hover:bg-surface-container-highest rounded-lg cursor-grab transition-colors">
+                <span class="material-symbols-outlined text-primary text-lg">waves</span>
+                <span class="font-body-md text-body-md">Sine Wave</span>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+    <!-- CANVAS AREA -->
+    <main class="flex-1 ml-16 relative bg-surface-bright overflow-hidden canvas-grid"><!-- SVG Connection Layer -->
+      <svg class="absolute inset-0 w-full h-full pointer-events-none z-10">
+        <defs>
+          <marker id="arrow" markerHeight="4" markerWidth="4" orient="auto-start-reverse" refX="5" refY="5"
+            viewBox="0 0 10 10">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0d9488"></path>
+          </marker>
+        </defs>
+        <!-- Connections with design system primary teal -->
+        <path class="signal-path" d="M 280 200 L 400 200" fill="none" stroke="#0d9488" stroke-width="2"></path>
+        <path class="signal-path" d="M 520 200 L 650 200" fill="none" stroke="#0d9488" stroke-width="2"></path>
+        <path class="signal-path opacity-40" d="M 280 200 L 320 200 L 320 340 L 400 340" fill="none" stroke="#0d9488"
+          stroke-width="2"></path>
+        <path class="signal-path opacity-40" d="M 520 340 L 600 340 L 600 240 L 650 240" fill="none" stroke="#0d9488"
+          stroke-width="2"></path>
+      </svg>
+      <!-- SIMULATION NODES -->
+      <div class="relative z-20 w-full h-full p-xl">
+        <!-- Block: Clock -->
+        <div
+          class="absolute left-40 top-40 w-44 bg-surface-container-low border border-outline-variant rounded-xl shadow-sm group hover:border-primary hover:shadow-md transition-all">
+          <div
+            class="px-sm py-1.5 bg-surface-container flex justify-between items-center rounded-t-xl border-b border-outline-variant">
+            <span class="font-label-sm text-label-sm text-on-surface flex items-center gap-xs"><span
+                class="material-symbols-outlined text-[14px]">schedule</span> CLOCK</span>
+            <span
+              class="material-symbols-outlined text-[14px] text-outline cursor-pointer hover:text-on-surface">more_vert</span>
+          </div>
+          <div class="p-sm flex flex-col gap-2">
+            <div class="flex justify-between items-center">
+              <span class="font-label-md text-label-md text-on-surface-variant">t: 1.452s</span>
+              <div
+                class="w-3 h-3 rounded-full bg-primary border-2 border-surface-container-lowest port-active cursor-crosshair">
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Block: Sine -->
+        <div
+          class="absolute left-96 top-40 w-44 bg-surface-container-low border border-outline-variant rounded-xl shadow-sm group hover:border-primary hover:shadow-md transition-all">
+          <div
+            class="px-sm py-1.5 bg-surface-container flex justify-between items-center rounded-t-xl border-b border-outline-variant">
+            <span class="font-label-sm text-label-sm text-on-surface flex items-center gap-xs"><span
+                class="material-symbols-outlined text-[14px]">waves</span> SINE</span>
+          </div>
+          <div class="p-sm flex justify-between items-center">
+            <div
+              class="w-3 h-3 rounded-full bg-outline-variant border-2 border-surface-container-lowest port-active cursor-crosshair">
+            </div>
+            <div class="text-right">
+              <p class="font-label-sm text-[9px] text-on-surface-variant">Freq: 60Hz</p>
+              <p class="font-label-md text-label-md text-primary font-bold">0.866</p>
+            </div>
+            <div
+              class="w-3 h-3 rounded-full bg-primary border-2 border-surface-container-lowest port-active cursor-crosshair">
+            </div>
+          </div>
+        </div>
+        <!-- Block: Scope -->
+        <div
+          class="absolute left-[640px] top-40 w-80 bg-surface-container-low border-2 border-primary/20 rounded-xl shadow-lg overflow-hidden border-outline-variant shadow-sm">
+          <div
+            class="px-sm py-2 bg-surface-container flex justify-between items-center border-b border-outline-variant">
+            <span class="font-label-sm text-label-sm text-primary font-bold flex items-center gap-xs"><span
+                class="material-symbols-outlined text-[14px]">analytics</span> SCOPE_VIEW_01</span>
+            <div class="flex gap-2">
+              <span
+                class="material-symbols-outlined text-[14px] text-outline cursor-pointer hover:text-on-surface">open_in_full</span>
+              <span
+                class="material-symbols-outlined text-[14px] text-outline cursor-pointer hover:text-on-surface">close</span>
+            </div>
+          </div>
+          <div class="p-md">
+            <div
+              class="w-full h-40 bg-surface-bright border border-outline-variant rounded-lg relative overflow-hidden flex items-end">
+              <!-- Grid lines -->
+              <div class="absolute inset-0 opacity-10"
+                style="background-size: 20px 20px; background-image: linear-gradient(to right, #6d7a77 1px, transparent 1px), linear-gradient(to bottom, #6d7a77 1px, transparent 1px);">
+              </div>
+              <!-- Waveform SVG -->
+              <svg class="w-full h-full absolute inset-0">
+                <path d="M 0 80 Q 20 20 40 80 T 80 80 T 120 80 T 160 80 T 200 80 T 240 80 T 280 80" fill="none"
+                  stroke="#0d9488" stroke-width="2.5"></path>
+                <path d="M 0 80 Q 20 140 40 80 T 80 80 T 120 80 T 160 80 T 200 80 T 240 80 T 280 80" fill="none"
+                  stroke="#904d00" stroke-dasharray="4" stroke-width="1.5"></path>
+              </svg>
+              <div class="absolute bottom-2 right-2 flex gap-md">
+                <span class="font-label-sm text-[10px] text-primary bg-primary/5 px-1.5 py-0.5 rounded">Ch1: Sine</span>
+                <span class="font-label-sm text-[10px] text-secondary bg-secondary/5 px-1.5 py-0.5 rounded">Ch2:
+                  Cos</span>
+              </div>
+            </div>
+          </div>
+          <div class="px-md pb-3 flex justify-between items-center">
+            <div class="flex gap-1.5">
+              <div class="w-2.5 h-2.5 rounded-full bg-outline-variant"></div>
+              <div class="w-2.5 h-2.5 rounded-full bg-outline-variant"></div>
+            </div>
+            <span class="font-label-sm text-label-sm text-outline">X: 1.452s | Y: 0.866</span>
+          </div>
+        </div>
+      </div>
+      <!-- BOTTOM STATUS BAR -->
+      <footer
+        class="absolute bottom-0 left-0 w-full h-8 bg-surface-container border-t border-outline-variant px-md flex items-center justify-between z-30 shadow-[0_-1px_3px_rgba(0,0,0,0.05)]">
+        <div class="flex items-center gap-md">
+          <div class="flex items-center gap-xs">
+            <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+            <span class="font-label-sm text-label-sm text-on-surface font-bold">SOLVER RUNNING</span>
+          </div>
+          <span class="font-label-sm text-label-sm text-outline-variant">|</span>
+          <span class="font-label-sm text-label-sm text-on-surface-variant">CPU: 12%</span>
+          <span class="font-label-sm text-label-sm text-on-surface-variant">RAM: 4.2GB</span>
+        </div>
+        <div class="flex items-center gap-sm">
+          <span class="font-label-sm text-label-sm text-on-surface-variant">UTF-8</span>
+          <span class="font-label-sm text-label-sm text-on-surface-variant">LN 42, COL 18</span>
+          <span
+            class="material-symbols-outlined text-[16px] text-outline cursor-pointer hover:text-on-surface transition-colors">notifications</span>
+        </div>
+      </footer>
+      <!-- Floating Tools -->
+      <div
+        class="absolute bottom-12 right-6 bg-surface-container-lowest border border-outline-variant rounded-full px-4 py-2 flex items-center gap-md shadow-lg z-30">
+        <button class="text-on-surface-variant hover:text-primary transition-colors"><span
+            class="material-symbols-outlined">zoom_in</span></button>
+        <button class="text-on-surface-variant hover:text-primary transition-colors"><span
+            class="material-symbols-outlined">zoom_out</span></button>
+        <span class="h-4 w-px bg-outline-variant"></span>
+        <button class="text-on-surface-variant hover:text-primary transition-colors"><span
+            class="material-symbols-outlined">center_focus_strong</span></button>
+        <button class="text-on-surface-variant hover:text-primary transition-colors"><span
+            class="material-symbols-outlined">grid_4x4</span></button>
+      </div>
+    </main>
+    <!-- RIGHT PANEL: PROPERTIES -->
+    <aside
+      class="w-72 bg-surface-container border-l border-outline-variant h-full p-md z-30 hidden xl:block overflow-y-auto shadow-inner">
+      <div class="flex items-center gap-xs mb-lg pb-sm border-b border-outline-variant">
+        <span class="material-symbols-outlined text-primary">tune</span>
+        <h3 class="font-headline-md text-headline-md text-on-surface">Properties</h3>
+      </div>
+      <div class="space-y-lg">
+        <div>
+          <label class="font-label-sm text-label-sm text-outline uppercase block mb-md tracking-widest">Selected: Sine
+            Wave</label>
+          <div class="space-y-md bg-surface-container-low p-md rounded-xl border border-outline-variant shadow-sm">
+            <div>
+              <div class="flex justify-between mb-2">
+                <span class="font-body-md text-body-md text-on-surface-variant">Amplitude</span>
+                <span class="font-label-md text-label-md text-primary font-bold">1.00</span>
+              </div>
+              <input
+                class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary"
+                type="range" value="100">
+            </div>
+            <div>
+              <div class="flex justify-between mb-2">
+                <span class="font-body-md text-body-md text-on-surface-variant">Frequency (Hz)</span>
+                <span class="font-label-md text-label-md text-primary font-bold">60.00</span>
+              </div>
+              <input
+                class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary"
+                type="range" value="60">
+            </div>
+            <div class="flex items-center gap-sm pt-1">
+              <input checked=""
+                class="w-4 h-4 rounded border-outline-variant bg-surface-container-lowest text-primary focus:ring-primary/20"
+                type="checkbox">
+              <span class="font-body-md text-body-md text-on-surface">Output Discrete</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="font-label-sm text-label-sm text-outline uppercase block mb-sm tracking-widest">Solver
+            Params</label>
+          <div class="p-sm bg-surface-container-lowest rounded-xl border border-outline-variant space-y-sm shadow-sm">
+            <div class="flex justify-between px-xs">
+              <span class="font-body-md text-body-md text-on-surface-variant">Type</span>
+              <span class="font-body-md text-body-md text-on-surface font-medium">Fixed-Step</span>
+            </div>
+            <div class="flex justify-between px-xs">
+              <span class="font-body-md text-body-md text-on-surface-variant">Solver</span>
+              <span class="font-body-md text-body-md text-on-surface font-medium">ode4 (RK)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <!-- MODAL: SIMULATION SETTINGS -->
+  <div class="fixed inset-0 z-[100] hidden items-center justify-center p-md bg-inverse-surface/40 backdrop-blur-[2px]"
+    id="simulation-settings">
+    <div
+      class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div class="p-lg border-b border-outline-variant flex justify-between items-center bg-surface-container">
+        <h3 class="font-headline-md text-headline-md text-on-surface">Solver Settings</h3>
+        <button class="text-on-surface-variant hover:text-on-surface transition-colors"
+          onclick="toggleModal('simulation-settings')"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="p-lg space-y-md">
+        <div class="space-y-xs">
+          <label class="font-label-md text-label-md text-outline uppercase tracking-wider">Step Size (Seconds)</label>
+          <input
+            class="w-full bg-surface-bright border border-outline-variant rounded-lg px-sm py-2 text-body-md font-label-md focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+            type="text" value="0.001">
+          <p class="text-[11px] text-on-surface-variant italic">Lower values increase accuracy but reduce real-time
+            performance.</p>
+        </div>
+        <div class="space-y-xs">
+          <label class="font-label-md text-label-md text-outline uppercase tracking-wider">Simulation Time</label>
+          <div class="flex gap-sm">
+            <input
+              class="flex-1 bg-surface-bright border border-outline-variant rounded-lg px-sm py-2 text-body-md font-label-md focus:border-primary focus:ring-1 focus:ring-primary/10"
+              type="text" value="0.0">
+            <span class="flex items-center text-outline">to</span>
+            <input
+              class="flex-1 bg-surface-bright border border-outline-variant rounded-lg px-sm py-2 text-body-md font-label-md focus:border-primary focus:ring-1 focus:ring-primary/10"
+              type="text" value="10.0">
+          </div>
+        </div>
+        <div class="flex items-center gap-sm pt-2">
+          <input class="w-5 h-5 rounded border-outline-variant bg-surface-bright text-primary focus:ring-primary/10"
+            type="checkbox">
+          <span class="font-body-md text-body-md text-on-surface font-medium">Real-time synchronization</span>
+        </div>
+      </div>
+      <div class="p-lg bg-surface-container flex justify-end gap-md">
+        <button
+          class="px-lg py-2 border border-outline-variant rounded-full font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-all"
+          onclick="toggleModal('simulation-settings')">CANCEL</button>
+        <button
+          class="px-lg py-2 bg-primary text-on-primary rounded-full font-label-md text-label-md font-bold shadow-md hover:shadow-lg hover:opacity-95 transition-all"
+          onclick="toggleModal('simulation-settings')">APPLY CHANGES</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    function toggleModal(id) {
+      const modal = document.getElementById(id);
+      if (modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
     }
-  }
 
-  function toggleModelBrowser() {
-    const panel = document.getElementById('model-browser');
-    if (panel.classList.contains('-translate-x-full')) {
-      panel.classList.remove('-translate-x-full');
-    } else {
-      panel.classList.add('-translate-x-full');
+    function toggleModelBrowser() {
+      const panel = document.getElementById('model-browser');
+      if (panel.classList.contains('-translate-x-full')) {
+        panel.classList.remove('-translate-x-full');
+      } else {
+        panel.classList.add('-translate-x-full');
+      }
     }
-  }
-</script>
+  </script>
 
 
 
 
-</body></html>
+</body>
+
+</html>
