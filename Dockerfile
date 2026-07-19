@@ -1,7 +1,9 @@
 # ============================================================
 # Stage 1: Build the C++ simulation engine (Linux binary)
+# Uses ubuntu:22.04 to match the glibc version of the runtime image
+# (eclipse-temurin:17-jre-jammy = Ubuntu 22.04 = glibc 2.35)
 # ============================================================
-FROM debian:bookworm-slim AS cpp-builder
+FROM ubuntu:22.04 AS cpp-builder
 
 RUN apt-get update && apt-get install -y \
     g++ \

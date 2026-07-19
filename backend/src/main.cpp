@@ -7,7 +7,7 @@
 //   3. Listen for JSON commands: start, stop, config, setStepSize, setSolver,
 //      setBlockParam, reset, set_speed, set_stop_time, get_status, ping
 //   4. Stream {type:"sample", t, sin, cos} samples back to the gateway
-//   5. Keep alive until Enter is pressed, then shut down gracefully
+//   5. Keep alive until session ends (Docker) or Enter is pressed (Windows)
 //
 // JSON parsing:
 //   Hand-rolled minimal helpers — no external dependency required.
@@ -21,6 +21,15 @@
 #include <string>
 #include <cstdio>
 #include <cstdlib>
+#include <thread>
+#include <chrono>
+
+#ifndef _WIN32
+#include <csignal>
+// Signal handler for SIGTERM / SIGINT — set by container runtime on shutdown
+static volatile bool g_running = true;
+static void onSignal(int) { g_running = false; }
+#endif
 
 // ---- Minimal hand-rolled JSON helpers (no external dependency) ----
 
@@ -175,9 +184,21 @@ int main() {
         }
     });
 
-    // Keep main thread alive until Enter is pressed
+#ifdef _WIN32
+    // Windows / local dev: keep alive until Enter is pressed
     logMessage("info", "Engine ready. Press Enter to shut down.");
     std::cin.get();
+#else
+    // Linux / Docker: keep alive until SIGTERM, SIGINT, or client disconnects.
+    // Do NOT use std::cin.get() — stdin is EOF in a non-interactive container.
+    signal(SIGTERM, onSignal);
+    signal(SIGINT,  onSignal);
+    logMessage("info", "Engine ready. Running until signal or client disconnect.");
+    while (g_running && session.isConnected()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    logMessage("info", "Shutting down (signal or disconnect received).");
+#endif
 
     engine.stop();
     session.close();
