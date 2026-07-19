@@ -28,8 +28,6 @@ import java.util.concurrent.Executors;
  */
 public class HttpApiServer {
 
-    public static final int HTTP_PORT = 8081;
-
     private final HttpServer server;
 
     // -------------------------------------------------------------------------
@@ -39,11 +37,12 @@ public class HttpApiServer {
     /**
      * Creates and configures the HTTP server. Call {@link #start()} to begin
      * accepting connections.
+     * Port is read from the HTTP_PORT environment variable (default 8081).
      *
      * @throws IOException if the port is already in use or another I/O error occurs
      */
     public HttpApiServer() throws IOException {
-        server = HttpServer.create(new InetSocketAddress(HTTP_PORT), 0);
+        server = HttpServer.create(new InetSocketAddress(Main.HTTP_PORT), 0);
 
         // Auth endpoints: signup, login, me
         server.createContext("/api/auth/", new AuthHandler());
@@ -53,6 +52,16 @@ public class HttpApiServer {
 
         // Export history log
         server.createContext("/api/exports", new ExportHandler());
+
+        // Health check endpoint for Render (and general monitoring)
+        server.createContext("/api/health", exchange -> {
+            String cors = System.getenv().getOrDefault("CORS_ORIGIN", "*");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", cors);
+            byte[] body = "{\"status\":\"ok\"}".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
 
         // Use a fixed thread pool for parallel request handling
         server.setExecutor(Executors.newFixedThreadPool(4));
@@ -67,10 +76,11 @@ public class HttpApiServer {
      */
     public void start() {
         server.start();
-        System.out.println("[HttpAPI] REST API server started — listening on http://localhost:" + HTTP_PORT);
-        System.out.println("[HttpAPI]   Auth:     http://localhost:" + HTTP_PORT + "/api/auth/");
-        System.out.println("[HttpAPI]   Projects: http://localhost:" + HTTP_PORT + "/api/projects");
-        System.out.println("[HttpAPI]   Exports:  http://localhost:" + HTTP_PORT + "/api/exports");
+        System.out.println("[HttpAPI] REST API server started — listening on http://localhost:" + Main.HTTP_PORT);
+        System.out.println("[HttpAPI]   Auth:     http://localhost:" + Main.HTTP_PORT + "/api/auth/");
+        System.out.println("[HttpAPI]   Projects: http://localhost:" + Main.HTTP_PORT + "/api/projects");
+        System.out.println("[HttpAPI]   Exports:  http://localhost:" + Main.HTTP_PORT + "/api/exports");
+        System.out.println("[HttpAPI]   Health:   http://localhost:" + Main.HTTP_PORT + "/api/health");
     }
 
     /**

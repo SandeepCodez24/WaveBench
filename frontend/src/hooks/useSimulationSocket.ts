@@ -34,7 +34,11 @@ export function useSimulationSocket(): SimulationSocket {
     }
 
     setConnectionState('connecting');
-    const ws = new WebSocket('ws://localhost:8080');
+    // Use VITE_WS_URL in production (set in Netlify env vars).
+    // Falls back to ws://localhost:8080 for local Ctrl+Shift+B dev workflow.
+    const wsUrl = import.meta.env.VITE_WS_URL as string | undefined
+      ?? `ws://${window.location.hostname}:8080`;
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log('[WS] Connected to Java gateway');

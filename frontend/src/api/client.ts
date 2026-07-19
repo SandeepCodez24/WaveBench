@@ -6,7 +6,10 @@
  * as a `Authorization: Bearer` header on every request.
  */
 
-const BASE_URL = `http://${window.location.hostname}:8081`;
+// Use VITE_API_URL in production (set in Netlify env vars).
+// Falls back to http://localhost:8081 for local Ctrl+Shift+B dev workflow.
+const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined)
+  ?? `http://${window.location.hostname}:8081`;
 
 function getToken(): string | null {
   return localStorage.getItem('wb_token');

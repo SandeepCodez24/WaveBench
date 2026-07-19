@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: wavebench-gateway
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    # Render assigns $PORT automatically; our start.sh reads it
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WS_PORT
+        value: "8080"
+      - key: HTTP_PORT
+        value: "8081"
+      - key: ENGINE_PORT
+        value: "5050"
+      # Set this to your Netlify URL after frontend is deployed
+      # - key: CORS_ORIGIN
+      #   value: https://your-site.netlify.app
+    healthCheckPath: /health

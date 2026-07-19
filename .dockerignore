@@ -1,0 +1,16 @@
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/.cache
+frontend/.env.local
+frontend/.env.production
+backend/src/build
+backend/build
+gateway/target
+.git
+.vscode
+graphify-out
+.cache
+*.md
+compile_commands.json
+docs

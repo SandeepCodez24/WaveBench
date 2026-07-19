@@ -4,14 +4,17 @@ import java.io.*;
 
 public class Main {
 
-    /** WebSocket port that browsers connect to */
-    public static final int WS_PORT     = 8080;
+    /** WebSocket port that browsers connect to (override via WS_PORT env var) */
+    public static final int WS_PORT     = Integer.parseInt(
+        System.getenv().getOrDefault("WS_PORT", "8080"));
 
-    /** REST API port for auth, projects, and exports */
-    public static final int HTTP_PORT   = 8081;
+    /** REST API port for auth, projects, and exports (override via HTTP_PORT env var) */
+    public static final int HTTP_PORT   = Integer.parseInt(
+        System.getenv().getOrDefault("HTTP_PORT", "8081"));
 
-    /** TCP port the C++ engine listens on */
-    public static final int ENGINE_PORT = 5050;
+    /** TCP port the C++ engine listens on (override via ENGINE_PORT env var) */
+    public static final int ENGINE_PORT = Integer.parseInt(
+        System.getenv().getOrDefault("ENGINE_PORT", "5050"));
 
     /** Hostname of the C++ engine (always localhost in this setup) */
     public static final String ENGINE_HOST = "localhost";
