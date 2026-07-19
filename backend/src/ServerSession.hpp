@@ -62,7 +62,11 @@ public:
     // Thread-safe — can be called from the simulation thread.
     void sendLine(const std::string& json);
 
-    // Gracefully close all sockets and clean up resources.
+    // Close only the client socket, keeping the server socket alive so
+    // acceptClient() can be called again when the gateway reconnects.
+    void disconnect();
+
+    // Gracefully close all sockets and clean up resources (full shutdown).
     void close();
 
     // Check if a client is currently connected

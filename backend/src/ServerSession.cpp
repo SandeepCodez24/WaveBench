@@ -81,10 +81,12 @@ bool ServerSession::listen(int port) {
     setsockopt(serverSock_, SOL_SOCKET, SO_REUSEADDR,
                reinterpret_cast<const char*>(&optVal), sizeof(optVal));
 
-    // Bind to the specified port on all interfaces
+    // Bind to loopback ONLY (127.0.0.1).
+    // This prevents Render's health checker from connecting to port 5050 —
+    // only the Java gateway running in the same container can reach it.
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK); // 127.0.0.1, not 0.0.0.0
     addr.sin_port        = htons(static_cast<uint16_t>(port));
 
     if (bind(serverSock_, reinterpret_cast<sockaddr*>(&addr),
@@ -226,13 +228,25 @@ void ServerSession::sendLine(const std::string& json) {
     }
 }
 
-// ---- close ------------------------------------------------------------------
+// ---- disconnect (client only) -----------------------------------------------
+
+void ServerSession::disconnect() {
+    // Close ONLY the client socket — keeps the server socket alive
+    // so acceptClient() can be called again for reconnection.
+    connected_ = false;
+    if (clientSock_ != INVALID_SOCK) {
+        shutdown(clientSock_, SHUT_BOTH);
+        closeSocket(clientSock_);
+        clientSock_ = INVALID_SOCK;
+    }
+}
+
+// ---- close (full shutdown) --------------------------------------------------
 
 void ServerSession::close() {
     connected_ = false;
 
     if (clientSock_ != INVALID_SOCK) {
-        // Graceful shutdown: signal no more sends, then close
         shutdown(clientSock_, SHUT_BOTH);
         closeSocket(clientSock_);
         clientSock_ = INVALID_SOCK;

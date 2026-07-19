@@ -5,29 +5,48 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * HttpApiUtils — shared utilities for the HTTP REST layer.
  *
  * <p>Provides CORS header injection and JSON response helpers used by all
  * handler classes ({@link AuthHandler}, ProjectHandler, ExportHandler).
+ *
+ * <p>CORS origins: always allows localhost dev ports. Additionally, if the
+ * {@code CORS_ORIGIN} environment variable is set (e.g. to the Netlify URL),
+ * that origin is also permitted.
  */
 public class HttpApiUtils {
 
-    /** Allowed origins for CORS (Vite dev + preview). */
-    private static final String[] ALLOWED_ORIGINS = {
-        "http://localhost:5173",
-        "http://localhost:4173",
-        "http://127.0.0.1:5173"
-    };
+    /** Base allowed origins for local development. */
+    private static final List<String> ALLOWED_ORIGINS = buildAllowedOrigins();
+
+    private static List<String> buildAllowedOrigins() {
+        List<String> origins = new ArrayList<>(Arrays.asList(
+            "http://localhost:5173",
+            "http://localhost:4173",
+            "http://127.0.0.1:5173"
+        ));
+        // Add production Netlify URL from environment (set in Render dashboard)
+        String corsOrigin = System.getenv("CORS_ORIGIN");
+        if (corsOrigin != null && !corsOrigin.isBlank()) {
+            origins.add(corsOrigin.trim());
+            System.out.println("[CORS] Production origin allowed: " + corsOrigin.trim());
+        }
+        return origins;
+    }
 
     /**
-     * Adds CORS headers to the response, permitting the Vite dev server and
-     * production preview server to call the REST API.
+     * Adds CORS headers to the response.
+     * Reflects the request's Origin back if it is in the allowed list,
+     * so credentials and preflight requests work correctly.
      */
     public static void addCorsHeaders(HttpExchange exchange) {
         String origin = exchange.getRequestHeaders().getFirst("Origin");
-        String allowed = "http://localhost:5173"; // default
+        String allowed = "http://localhost:5173"; // safe default
         if (origin != null) {
             for (String o : ALLOWED_ORIGINS) {
                 if (o.equalsIgnoreCase(origin)) { allowed = o; break; }
@@ -36,6 +55,7 @@ public class HttpApiUtils {
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin",  allowed);
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Credentials", "true");
         exchange.getResponseHeaders().set("Access-Control-Max-Age",       "86400");
     }
 

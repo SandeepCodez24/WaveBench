@@ -21,10 +21,10 @@
 #include <string>
 #include <cstdio>
 #include <cstdlib>
-#include <thread>
-#include <chrono>
 
 #ifndef _WIN32
+#include <thread>
+#include <chrono>
 #include <csignal>
 // Signal handler for SIGTERM / SIGINT — set by container runtime on shutdown
 static volatile bool g_running = true;
@@ -84,123 +84,148 @@ int main() {
     SimulationEngine engine;
 
     logMessage("info", "WaveBench Studio Engine v1.0 starting");
-    logMessage("info", "Listening on TCP port 5050");
+    logMessage("info", "Listening on TCP port 5050 (loopback only)");
 
     if (!session.listen(5050)) {
         logMessage("error", "Failed to start server. Exiting.");
         return 1;
     }
 
-    logMessage("info", "Waiting for Java gateway connection");
-    if (!session.acceptClient()) {
-        logMessage("error", "Failed to accept client. Exiting.");
-        return 1;
-    }
-    logMessage("info", "Java gateway connected");
-
-    // Handle incoming JSON commands from the gateway
-    session.startReceiving([&](const std::string& msg) {
-        std::string type = jsonGetString(msg, "type");
-        logMessage("info", "Received command: " + msg);
-
-        if (type == "start") {
-            // Start the simulation loop, streaming samples back over TCP
-            engine.start([&](double t, double s, double c) {
-                if (session.isConnected()) {
-                    session.sendLine(formatSample(t, s, c));
-                }
-            });
-
-        } else if (type == "stop") {
-            engine.stop();
-
-        } else if (type == "config") {
-            // Full configuration: {"type":"config","stepSize":0.02,"solver":"RK4"}
-            double stepSize = jsonGetNumber(msg, "stepSize");
-            std::string solver = jsonGetString(msg, "solver");
-            engine.configure(
-                stepSize > 0.0 ? stepSize : 0.02,
-                solver.empty() ? "RK4" : solver
-            );
-
-        } else if (type == "setStepSize") {
-            // Hot-update step size: {"type":"setStepSize","value":0.05}
-            double value = jsonGetNumber(msg, "value");
-            if (value > 0.0) {
-                engine.setStepSize(value);
-            } else {
-                logMessage("warning", "Invalid setStepSize value");
-            }
-
-        } else if (type == "setSolver") {
-            // Hot-update solver: {"type":"setSolver","value":"Euler"}
-            std::string solver = jsonGetString(msg, "value");
-            if (!solver.empty()) {
-                engine.setSolver(solver);
-            }
-
-        } else if (type == "setBlockParam") {
-            // Hot-update block parameters: {"type":"setBlockParam","blockId":"sine","amplitude":1.5,"frequency":10.0}
-            std::string blockId = jsonGetString(msg, "blockId");
-            double amplitude = jsonGetNumber(msg, "amplitude");
-            double frequency = jsonGetNumber(msg, "frequency");
-            engine.updateBlockParam(blockId, amplitude, frequency);
-
-        } else if (type == "reset") {
-            // Reset simulation: zero time, clear scope buffer, restart if running
-            engine.reset([&](double t, double s, double c) {
-                if (session.isConnected()) {
-                    if (t < 0.0) {
-                        // Sentinel: send reset acknowledgement instead of a sample
-                        session.sendLine(R"({"type":"reset_ack"})");
-                    } else {
-                        session.sendLine(formatSample(t, s, c));
-                    }
-                }
-            });
-
-        } else if (type == "set_speed") {
-            // Simulation speed multiplier: {"type":"set_speed","value":4.0}
-            // 0 = MAX (no sleep), 0.25 = quarter speed, 1 = real-time, 4 = 4x
-            double value = jsonGetNumber(msg, "value");
-            engine.setSpeed(value);
-
-        } else if (type == "set_stop_time") {
-            // Auto-halt when sim time reaches this value: {"type":"set_stop_time","value":10.0}
-            double value = jsonGetNumber(msg, "value");
-            engine.setStopTime(value);
-
-        } else if (type == "get_status") {
-            // Return engine status JSON to the gateway
-            std::string status = engine.getStatus();
-            session.sendLine(status);
-
-        } else if (type == "ping") {
-            // Health check — respond immediately
-            session.sendLine(R"({"type":"pong"})");
-
-        } else {
-            logMessage("warning", "Unknown command type: " + type);
-        }
-    });
-
-#ifdef _WIN32
-    // Windows / local dev: keep alive until Enter is pressed
-    logMessage("info", "Engine ready. Press Enter to shut down.");
-    std::cin.get();
-#else
-    // Linux / Docker: keep alive until SIGTERM, SIGINT, or client disconnects.
-    // Do NOT use std::cin.get() — stdin is EOF in a non-interactive container.
+#ifndef _WIN32
+    // Register signal handlers once, before the connection loop
     signal(SIGTERM, onSignal);
     signal(SIGINT,  onSignal);
-    logMessage("info", "Engine ready. Running until signal or client disconnect.");
-    while (g_running && session.isConnected()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
-    logMessage("info", "Shutting down (signal or disconnect received).");
 #endif
 
-    engine.stop();
+    // ------------------------------------------------------------------
+    // Connection loop — on Linux/Docker, restart the session each time
+    // the gateway disconnects (e.g. container restart, redeploy).
+    // On Windows (local dev), this runs only once and exits on Enter.
+    // ------------------------------------------------------------------
+    do {
+        logMessage("info", "Waiting for Java gateway connection");
+        if (!session.acceptClient()) {
+            logMessage("error", "Failed to accept client. Exiting.");
+            break;
+        }
+        logMessage("info", "Java gateway connected");
+
+        // Handle incoming JSON commands from the gateway
+        session.startReceiving([&](const std::string& msg) {
+            std::string type = jsonGetString(msg, "type");
+            logMessage("info", "Received command: " + msg);
+
+            if (type == "start") {
+                // Start the simulation loop, streaming samples back over TCP
+                engine.start([&](double t, double s, double c) {
+                    if (session.isConnected()) {
+                        session.sendLine(formatSample(t, s, c));
+                    }
+                });
+
+            } else if (type == "stop") {
+                engine.stop();
+
+            } else if (type == "config") {
+                // Full configuration: {"type":"config","stepSize":0.02,"solver":"RK4"}
+                double stepSize = jsonGetNumber(msg, "stepSize");
+                std::string solver = jsonGetString(msg, "solver");
+                engine.configure(
+                    stepSize > 0.0 ? stepSize : 0.02,
+                    solver.empty() ? "RK4" : solver
+                );
+
+            } else if (type == "setStepSize") {
+                // Hot-update step size: {"type":"setStepSize","value":0.05}
+                double value = jsonGetNumber(msg, "value");
+                if (value > 0.0) {
+                    engine.setStepSize(value);
+                } else {
+                    logMessage("warning", "Invalid setStepSize value");
+                }
+
+            } else if (type == "setSolver") {
+                // Hot-update solver: {"type":"setSolver","value":"Euler"}
+                std::string solver = jsonGetString(msg, "value");
+                if (!solver.empty()) {
+                    engine.setSolver(solver);
+                }
+
+            } else if (type == "setBlockParam") {
+                // Hot-update block parameters
+                std::string blockId = jsonGetString(msg, "blockId");
+                double amplitude = jsonGetNumber(msg, "amplitude");
+                double frequency = jsonGetNumber(msg, "frequency");
+                engine.updateBlockParam(blockId, amplitude, frequency);
+
+            } else if (type == "reset") {
+                // Reset simulation: zero time, clear scope buffer, restart if running
+                engine.reset([&](double t, double s, double c) {
+                    if (session.isConnected()) {
+                        if (t < 0.0) {
+                            session.sendLine(R"({"type":"reset_ack"})");
+                        } else {
+                            session.sendLine(formatSample(t, s, c));
+                        }
+                    }
+                });
+
+            } else if (type == "set_speed") {
+                double value = jsonGetNumber(msg, "value");
+                engine.setSpeed(value);
+
+            } else if (type == "set_stop_time") {
+                double value = jsonGetNumber(msg, "value");
+                engine.setStopTime(value);
+
+            } else if (type == "get_status") {
+                std::string status = engine.getStatus();
+                session.sendLine(status);
+
+            } else if (type == "ping") {
+                session.sendLine(R"({"type":"pong"})");
+
+            } else {
+                logMessage("warning", "Unknown command type: " + type);
+            }
+        });
+
+#ifdef _WIN32
+        // Windows / local dev: block until Enter is pressed
+        logMessage("info", "Engine ready. Press Enter to shut down.");
+        std::cin.get();
+        engine.stop();
+        session.close();
+        logMessage("info", "Shutdown complete.");
+        return 0;
+#else
+        // Linux / Docker: wait until gateway disconnects or signal received
+        logMessage("info", "Engine ready. Running until signal or client disconnect.");
+        while (g_running && session.isConnected()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+
+        engine.stop();
+
+        if (!g_running) {
+            // Signal received — full shutdown
+            logMessage("info", "Signal received. Shutting down.");
+            break;
+        }
+
+        // Gateway disconnected — reset client socket and wait for reconnect
+        logMessage("info", "Gateway disconnected. Waiting for reconnection...");
+        session.disconnect();
+        // Small pause to let the receive thread fully exit before next accept()
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+#endif
+    }
+#ifdef _WIN32
+    while (false);  // Windows: loop runs exactly once (Enter exits above)
+#else
+    while (g_running);  // Linux: loop until SIGTERM/SIGINT
+#endif
+
     session.close();
     logMessage("info", "Shutdown complete.");
     return 0;
