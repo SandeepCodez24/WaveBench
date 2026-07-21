@@ -1,4 +1,4 @@
-﻿# 🎛️ WaveBench Studio
+﻿#  WaveBench Studio
 
 > **A browser-based block-diagram simulation editor** — inspired by MATLAB Simulink's interaction model, rebuilt as a modern three-language system: a React frontend, a Java WebSocket gateway, and a C++ simulation engine.
 >
@@ -6,7 +6,7 @@
 
 ---
 
-## ✨ What Is This?
+##  What Is This?
 
 WaveBench Studio lets you **build and run a live signal-processing simulation** on a drag-and-drop canvas. A **Clock** block drives a **Sine** and a **Cosine** block, both of which feed into a **Scope** that plots a live dual-trace waveform — all computed by a real C++ numerical engine running on your machine, not simulated in the browser.
 
@@ -22,7 +22,7 @@ The project deliberately spans **three languages and three processes** to demons
 
 ---
 
-## 🏗️ Architecture — Three Layers, One Pipeline
+##  Architecture — Three Layers, One Pipeline
 
 ### Layer 1 — C++ Simulation Engine (`backend/`)
 The mathematical core. Owns the block graph, runs the solver loop on a **dedicated thread**, and streams `{ t, sin, cos }` JSON samples over raw TCP to whoever is connected.
@@ -53,7 +53,7 @@ The interactive canvas. Built with **React 18 + TypeScript + Vite + React Flow**
 
 ---
 
-## 🚀 Quick Start — One-Click Run
+##  Quick Start — One-Click Run
 
 > **This is the recommended path.** Everything is wired into VS Code tasks.
 
@@ -71,7 +71,7 @@ Make sure the following tools are installed **and available in your terminal** b
 | **MinGW-w64 g++ (POSIX threads)** | Compiles the C++ engine | Via MSYS2: `pacman -S mingw-w64-ucrt-x86_64-gcc` | `g++ --version` |
 | **Node.js LTS** | Runs the React frontend | [nodejs.org](https://nodejs.org) | `node -v` && `npm -v` |
 
-> ⚠️ **Important:** Always close and reopen your terminal (and VS Code) after installing any tool. PATH changes are not picked up by already-open sessions.
+>  **Important:** Always close and reopen your terminal (and VS Code) after installing any tool. PATH changes are not picked up by already-open sessions.
 
 ### Run with One Click
 
@@ -90,7 +90,7 @@ Once the last terminal prints a local URL (typically `http://localhost:5173`), o
 
 ---
 
-## 🛠️ Manual Run (Fallback)
+##  Manual Run (Fallback)
 
 If the one-click build does not work, run each step in its own terminal **in this exact order**:
 
@@ -118,7 +118,7 @@ npm run dev
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 wavebench-studio/
@@ -155,10 +155,10 @@ wavebench-studio/
 │       ├── main.tsx                #   React entry point
 │       ├── index.css               #   Global design system & tokens
 │       ├── nodes/                  #   Custom React Flow block nodes
-│       │   ├── ClockNode.tsx       #     ⏱  Master time reference
+│       │   ├── ClockNode.tsx       #       Master time reference
 │       │   ├── SineNode.tsx        #     〜  sin() processor
 │       │   ├── CosineNode.tsx      #     〜  cos() processor
-│       │   ├── ScopeNode.tsx       #     📈  Live waveform display
+│       │   ├── ScopeNode.tsx       #       Live waveform display
 │       │   ├── GainNode.tsx        #     ×  Scalar multiplier
 │       │   ├── ConstantNode.tsx    #     #  Constant signal source
 │       │   ├── SumNode.tsx         #     +  Signal adder
@@ -176,7 +176,7 @@ wavebench-studio/
 │       │   ├── LogsTerminalPanel.tsx#  Unified logs from all 3 processes
 │       │   ├── PropertiesPanel.tsx #   Block property editor
 │       │   ├── ModelBrowser.tsx    #   Block palette / library browser
-│       │   ├── CommandPalette.tsx  #   ⌘K command palette
+│       │   ├── CommandPalette.tsx  #   K command palette
 │       │   ├── KeyboardShortcutsModal.tsx
 │       │   ├── GuidedTour.tsx      #   First-run interactive tour
 │       │   ├── PerfHUD.tsx         #   Performance heads-up display
@@ -191,7 +191,7 @@ wavebench-studio/
 │       └── pages/                  #   Login / Signup pages
 │
 ├── .vscode/
-│   ├── tasks.json                  # ✅ One-click Ctrl+Shift+B build config
+│   ├── tasks.json                  #  One-click Ctrl+Shift+B build config
 │   ├── launch.json                 #   Debug launch configs
 │   └── settings.json               #   Workspace editor settings
 │
@@ -211,7 +211,7 @@ wavebench-studio/
 
 ---
 
-## ✅ Features
+##  Features
 
 ### Core (Assignment Requirements)
 
@@ -247,7 +247,7 @@ wavebench-studio/
 
 ---
 
-## 🔌 Communication Protocol
+##  Communication Protocol
 
 All messages are plain JSON, delivered over WebSocket (browser ↔ gateway) or TCP (gateway ↔ engine).
 
@@ -273,7 +273,7 @@ All messages are plain JSON, delivered over WebSocket (browser ↔ gateway) or T
 
 ---
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### `g++` not found / wrong version
 
@@ -368,7 +368,7 @@ Or switch to PowerShell, where `./` works correctly.
 
 ---
 
-## 🧰 Tech Stack
+##  Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -380,7 +380,7 @@ Or switch to PowerShell, where `./` works correctly.
 
 ---
 
-## 📄 Documentation
+##  Documentation
 
 Full design and specification documents live in [`/docs`](./docs/):
 
@@ -395,7 +395,7 @@ Full design and specification documents live in [`/docs`](./docs/):
 
 ---
 
-## 📬 Submission Info
+##  Submission Info
 
 | | |
 |---|---|
