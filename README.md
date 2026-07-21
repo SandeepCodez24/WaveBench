@@ -1,4 +1,4 @@
-﻿#  WaveBench Studio
+#  WaveBench Studio
 
 > **A browser-based block-diagram simulation editor** — inspired by MATLAB Simulink's interaction model, rebuilt as a modern three-language system: a React frontend, a Java WebSocket gateway, and a C++ simulation engine.
 >
@@ -377,6 +377,30 @@ Or switch to PowerShell, where `./` works correctly.
 | Engine | C++17, MinGW-w64 (POSIX threads), Winsock2 |
 | Protocol | JSON over WebSocket (browser ↔ gateway) and TCP (gateway ↔ engine) |
 | IDE | VS Code |
+
+---
+
+##  Deployment
+
+WaveBench Studio is deployed in a fully-decoupled, cloud-hosted environment:
+
+- **Frontend Website**: [wavebench-studio.netlify.app](https://wavebench-studio.netlify.app/)
+- **Backend & Gateway**: Multi-stage Dockerized build hosted on **Render** as a single Web Service.
+
+### Backend and Gateway Connection on Render
+Render assigns a single public URL and a dynamic `$PORT` to the Web Service. To achieve a seamless connection between all three layers in this single container environment:
+
+1. **Subprocess Architecture**: The Java Gateway acts as the parent host. When initialized via `start.sh`, the Java process spawns the C++ Simulation Engine as a subprocess.
+2. **Local Loopback Communication**: The C++ Engine binds internally to loopback `127.0.0.1:5050` (or `ENGINE_PORT`), communicating with the Java Gateway over low-latency raw TCP sockets.
+3. **Nginx Reverse Proxy**: An Nginx instance runs inside the Docker container and binds to the Render-assigned public `$PORT` (exposed to the internet). Nginx proxies incoming traffic as follows:
+   - **WebSockets** (`/ws` path) are forwarded to the Java WebSocket server listening on port `8080`.
+   - **REST API** (`/api/*` path) is forwarded to the Java HTTP REST API listening on port `8081`.
+   - **Health Checks** (`/health` path) are mapped to the REST API's health check handler.
+
+### Frontend Hosting on Netlify
+The React client is built into static assets and deployed to Netlify. 
+- During build, the `VITE_WS_URL` and `VITE_API_URL` environment variables are pointed to the Render service's proxy URL (e.g., `wss://wavebench-gateway.onrender.com/ws` and `https://wavebench-gateway.onrender.com/api`).
+- Netlify serves the static assets, and client-side routing is handled gracefully.
 
 ---
 
