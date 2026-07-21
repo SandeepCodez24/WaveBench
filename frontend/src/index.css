@@ -156,6 +156,13 @@ body {
 /* Grid is rendered entirely by the React Flow <Background> SVG layer (see App.tsx). */
 
 /* React Flow customizations */
+.pan-mode-active .react-flow__pane {
+  cursor: grab !important;
+}
+.pan-mode-active .react-flow__pane:active {
+  cursor: grabbing !important;
+}
+
 .react-flow__viewport {
   transition: none !important;
 }

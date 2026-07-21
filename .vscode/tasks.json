@@ -28,8 +28,11 @@
       "label": "Run React Frontend",
       "type": "shell",
       "command": "npm --prefix frontend install && npm --prefix frontend run dev",
-      "windows": {
-        "command": "powershell -Command \"cd frontend; npm install; npm run dev\""
+      "options": {
+        "shell": {
+          "executable": "cmd.exe",
+          "args": ["/d", "/c"]
+        }
       },
       "isBackground": true,
       "problemMatcher": []

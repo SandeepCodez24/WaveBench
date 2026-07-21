@@ -138,6 +138,7 @@ function FlowWorkspace({
 
   // --- Spec-driven Pointer and Command states ---
   const [spacePressed, setSpacePressed] = useState<boolean>(false);
+  const [isPanMode, setIsPanMode] = useState<boolean>(false);
   const [quickAddMenu, setQuickAddMenu] = useState<{ x: number; y: number; flowX: number; flowY: number } | null>(null);
   const [hoveredEdgeInfo, setHoveredEdgeInfo] = useState<{ edgeId: string; x: number; y: number } | null>(null);
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
@@ -192,6 +193,11 @@ function FlowWorkspace({
   const loadedProjectRef = useRef<string | null>(null);
 
   // Initialize history on mount / load active project
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  const handleStopRef = useRef(handleStop);
+  useEffect(() => { handleStopRef.current = handleStop; }, [handleStop]);
+
   useEffect(() => {
     if (activeProjectName) {
       if (loadedProjectRef.current === activeProjectName) return;
@@ -201,8 +207,8 @@ function FlowWorkspace({
         .then((response: any) => {
           const loadedData = response.diagram || response;
           if (loadedData) {
-            if (isPlaying) {
-              handleStop();
+            if (isPlayingRef.current) {
+              handleStopRef.current();
             }
             clearSamples();
             if (loadedData.nodes) {
@@ -235,7 +241,7 @@ function FlowWorkspace({
       setHistory([{ nodes: initialNodes, edges: initialEdges }]);
       setHistoryIndex(0);
     }
-  }, [activeProjectName, setNodes, setEdges, clearSamples, send, isPlaying, handleStop]);
+  }, [activeProjectName, setNodes, setEdges, clearSamples, send]);
 
   const pushToHistory = useCallback((newNodes: Node[], newEdges: Edge[]) => {
     const cleanNodes = JSON.parse(JSON.stringify(newNodes));
@@ -1421,15 +1427,23 @@ function FlowWorkspace({
     if (target.closest('.react-flow__node') || target.closest('.react-flow__edge') || target.closest('.floating-zoom-bar') || target.closest('.floating-tools')) {
       return;
     }
-    const flowPos = screenToFlowPosition({
-      x: event.clientX,
-      y: event.clientY,
-    });
-    setQuickAddMenu({
-      x: event.clientX,
-      y: event.clientY,
-      flowX: flowPos.x,
-      flowY: flowPos.y,
+    setIsPanMode((prev) => {
+      const next = !prev;
+      if (next) {
+        setQuickAddMenu(null);
+      } else {
+        const flowPos = screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        setQuickAddMenu({
+          x: event.clientX,
+          y: event.clientY,
+          flowX: flowPos.x,
+          flowY: flowPos.y,
+        });
+      }
+      return next;
     });
   }, [screenToFlowPosition]);
 
@@ -1575,6 +1589,8 @@ function FlowWorkspace({
             onOpenPanel={(cat) => setActivePanelCategory(cat)}
             onClosePanel={() => setActivePanelCategory(null)}
             onToggleDiagnostics={() => setShowDiagnostics(v => !v)}
+            isPanMode={isPanMode}
+            onTogglePanMode={() => setIsPanMode(v => !v)}
           />
         )}
 
@@ -1611,12 +1627,12 @@ function FlowWorkspace({
             defaultMarkerColor="#0d9488"
             onNodeClick={handleNodeClick}
             onPaneClick={handlePaneClick}
-            panOnDrag={spacePressed}
-            selectionOnDrag={!spacePressed}
+            panOnDrag={spacePressed || isPanMode}
+            selectionOnDrag={!(spacePressed || isPanMode)}
             connectionRadius={20}
             onEdgeMouseEnter={handleEdgeMouseEnter}
             onEdgeMouseLeave={handleEdgeMouseLeave}
-            style={{ cursor: spacePressed ? 'grab' : 'default' }}
+            className={spacePressed || isPanMode ? 'pan-mode-active' : ''}
           >
             {showGrid === 'lines' && (
               <Background

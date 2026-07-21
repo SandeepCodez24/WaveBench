@@ -33,8 +33,10 @@ public class HttpApiUtils {
         // Add production Netlify URL from environment (set in Render dashboard)
         String corsOrigin = System.getenv("CORS_ORIGIN");
         if (corsOrigin != null && !corsOrigin.isBlank()) {
-            origins.add(corsOrigin.trim());
-            System.out.println("[CORS] Production origin allowed: " + corsOrigin.trim());
+            // Strip trailing slash — browsers send Origin without it
+            String trimmed = corsOrigin.trim().replaceAll("/+$", "");
+            origins.add(trimmed);
+            System.out.println("[CORS] Production origin allowed: " + trimmed);
         }
         return origins;
     }

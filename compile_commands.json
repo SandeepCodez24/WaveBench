@@ -1,0 +1,17 @@
+[
+  {
+    "directory": "c:/Users/sande/OneDrive/Desktop/wavebench-studio",
+    "command": "c:/Users/sande/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin/g++.exe -std=c++17 -O2 -D_WIN32 -DWIN32 -DWIN32_LEAN_AND_MEAN -Ibackend/src backend/src/main.cpp",
+    "file": "backend/src/main.cpp"
+  },
+  {
+    "directory": "c:/Users/sande/OneDrive/Desktop/wavebench-studio",
+    "command": "c:/Users/sande/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin/g++.exe -std=c++17 -O2 -D_WIN32 -DWIN32 -DWIN32_LEAN_AND_MEAN -Ibackend/src backend/src/SimulationEngine.cpp",
+    "file": "backend/src/SimulationEngine.cpp"
+  },
+  {
+    "directory": "c:/Users/sande/OneDrive/Desktop/wavebench-studio",
+    "command": "c:/Users/sande/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin/g++.exe -std=c++17 -O2 -D_WIN32 -DWIN32 -DWIN32_LEAN_AND_MEAN -Ibackend/src backend/src/ServerSession.cpp",
+    "file": "backend/src/ServerSession.cpp"
+  }
+]

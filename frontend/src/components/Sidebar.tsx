@@ -5,6 +5,8 @@ interface Props {
   onOpenPanel: (category: Category) => void;
   onClosePanel: () => void;
   onToggleDiagnostics?: () => void;
+  isPanMode?: boolean;
+  onTogglePanMode?: () => void;
 }
 
 const RAIL_ITEMS = [
@@ -24,8 +26,13 @@ const RAIL_ITEMS = [
   },
 ];
 
-export function Sidebar({ activePanelCategory, onOpenPanel, onClosePanel, onToggleDiagnostics }: Props) {
+export function Sidebar({ activePanelCategory, onOpenPanel, onClosePanel, onToggleDiagnostics, isPanMode = false, onTogglePanMode }: Props) {
   const handleClick = (item: typeof RAIL_ITEMS[0]) => {
+    if (item.id === 'pointer') {
+      onTogglePanMode?.();
+      onClosePanel();
+      return;
+    }
     if (item.category === null) return; // Pointer — no panel
     if (activePanelCategory === item.category) {
       onClosePanel(); // toggle off
@@ -39,18 +46,29 @@ export function Sidebar({ activePanelCategory, onOpenPanel, onClosePanel, onTogg
       {/* Top Menu Items */}
       <div className="rail-group">
         {RAIL_ITEMS.map(item => {
-          const isActive = item.category !== null && activePanelCategory === item.category;
+          let isActive = item.category !== null && activePanelCategory === item.category;
+          let icon = item.icon;
+          let label = item.label;
+          let title = item.title;
+
+          if (item.id === 'pointer') {
+            isActive = isPanMode;
+            icon = isPanMode ? 'pan_tool' : 'near_me';
+            label = isPanMode ? 'Pan' : 'Pointer';
+            title = isPanMode ? 'Pan tool (Double click canvas to toggle)' : 'Select / Move tool (Double click canvas to toggle)';
+          }
+
           return (
             <button
               key={item.id}
               className={`rail-item ${isActive ? 'active' : ''}`}
-              title={item.title}
+              title={title}
               onClick={() => handleClick(item)}
             >
               <span className={`material-symbols-outlined${isActive ? ' filled' : ''}`}>
-                {item.icon}
+                {icon}
               </span>
-              <span className="rail-label">{item.label}</span>
+              <span className="rail-label">{label}</span>
             </button>
           );
         })}
